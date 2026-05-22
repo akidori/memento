@@ -1,0 +1,1954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#030508">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>MEMENTO ― 余命三十日</title>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Shippori+Mincho:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #050810; --text: #fff; --dim: #8a8a8a; --gold: #f4d160; --danger: #ff5050; --good: #6acf6a; --coin: #d8b850; --vital: #ff8080; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #030508; color: var(--text); font-family: 'DotGothic16', monospace; min-height: 100vh; user-select: none; -webkit-font-smoothing: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: contain; }
+  html { overflow-y: auto; }
+  body { display: flex; align-items: flex-start; justify-content: center; padding: 8px 8px 20px; min-height: 100vh; }
+  .stage { width: 100%; max-width: 780px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; }
+
+  /* === タイトル画面 === */
+  .title-screen { position: fixed; inset: 0; background: linear-gradient(180deg, #000 0%, #0a0510 60%, #000 100%); z-index: 100; display: flex; align-items: flex-start; justify-content: center; flex-direction: column; align-items: center; text-align: center; padding: 30px 20px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .title-screen.hidden { display: none; }
+  .title-main { font-family: 'Shippori Mincho', serif; font-size: clamp(48px, 11vw, 110px); font-weight: 800; letter-spacing: 0.3em; margin-bottom: 4px; color: #fff; text-shadow: 0 0 20px rgba(244,209,96,0.3), 4px 4px 0 #3a0a0a; line-height: 1; }
+  .title-sub { font-family: 'Shippori Mincho', serif; font-size: clamp(18px, 3vw, 26px); letter-spacing: 0.4em; color: var(--gold); margin-bottom: 6px; }
+  .title-en { font-size: 11px; letter-spacing: 0.5em; color: var(--dim); margin-bottom: 32px; }
+  .title-quote { font-family: 'Shippori Mincho', serif; font-style: italic; max-width: 500px; font-size: 15px; line-height: 2.2; margin-bottom: 28px; color: #d0d0d0; }
+  .title-quote .lead { color: var(--gold); font-size: 13px; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .title-rules { max-width: 520px; font-size: 12px; color: var(--dim); line-height: 2; margin-bottom: 30px; letter-spacing: 0.05em; padding: 18px; border: 1px solid #303040; border-radius: 4px; background: rgba(20,20,30,0.5); }
+  .title-rules h3 { color: var(--gold); font-size: 13px; letter-spacing: 0.2em; margin-bottom: 8px; }
+  .title-rules p { margin-bottom: 4px; }
+  .btn-start, .btn-modal, .btn-choice { background: linear-gradient(180deg, #3a1818 0%, #1a0808 100%); border: 2px solid var(--gold); border-radius: 4px; color: #fff; font-family: 'DotGothic16', monospace; font-size: 15px; letter-spacing: 0.2em; padding: 14px 32px; cursor: pointer; transition: all 0.2s; }
+  .btn-start:hover, .btn-modal:hover { background: linear-gradient(180deg, #5a2828 0%, #2a1010 100%); box-shadow: 0 0 12px rgba(244,209,96,0.4); }
+  .controls-hint { margin-top: 22px; font-size: 10px; color: #505050; letter-spacing: 0.15em; line-height: 1.8; }
+
+  /* === ステータスバー === */
+  .status-bar { border: 2px solid #fff; border-radius: 4px; background: linear-gradient(180deg, #0a0a18 0%, #030305 100%); padding: 10px 14px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; font-size: 13px; }
+  .status-cell { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+  .status-label { font-size: 9px; color: var(--dim); letter-spacing: 0.15em; }
+  .status-value { font-size: 15px; color: #fff; letter-spacing: 0.05em; }
+  .status-value.warn { color: var(--danger); animation: blink 0.6s steps(2) infinite; }
+  .status-value.gold { color: var(--gold); }
+  .status-value.vital { color: var(--vital); }
+  .status-value.coin { color: var(--coin); }
+  @keyframes blink { 50% { opacity: 0.3; } }
+  .bar-back { width: 100%; height: 4px; background: #1a1a2a; margin-top: 3px; border-radius: 2px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--vital); transition: width 0.3s; }
+
+  /* === キャンバス === */
+  .canvas-wrap { border: 2px solid #fff; border-radius: 4px; background: #000; overflow: hidden; line-height: 0; position: relative; }
+  #canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; width: 100%; height: auto; max-height: 50vh; object-fit: contain; }
+  @media (max-width: 720px) {
+    #canvas { max-height: 38vh; }
+  }
+  .damage-flash { position: absolute; inset: 0; background: #ff3030; opacity: 0; pointer-events: none; mix-blend-mode: multiply; transition: opacity 0.35s; }
+  .damage-flash.active { opacity: 0.45; transition: opacity 0.05s; }
+  .floor-overlay { position: absolute; top: 8px; left: 8px; font-family: 'Shippori Mincho', serif; font-size: 13px; color: var(--gold); letter-spacing: 0.2em; text-shadow: 1px 1px 2px #000; pointer-events: none; }
+  .day-overlay { position: absolute; top: 8px; right: 8px; font-size: 11px; color: #fff; letter-spacing: 0.15em; text-shadow: 1px 1px 2px #000; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 2px; pointer-events: none; }
+  .sound-toggle { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.6); border: 1px solid #fff; color: #fff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; transition: opacity 0.2s; }
+  .sound-toggle.muted { opacity: 0.4; color: #888; }
+  .sound-toggle:hover { background: rgba(60,60,80,0.8); }
+
+  /* === メッセージウィンドウ === */
+  .msg-window { border: 2px solid #fff; border-radius: 4px; background: linear-gradient(180deg, #0a0a18 0%, #030305 100%); padding: 14px 18px; min-height: 90px; font-size: 15px; line-height: 1.9; position: relative; }
+  .log-entry { color: #fff; margin-bottom: 2px; }
+  .log-entry.warn { color: var(--danger); }
+  .log-entry.good { color: var(--gold); }
+  .log-entry.dim { color: #909090; }
+  .log-entry.epic { color: var(--gold); font-family: 'Shippori Mincho', serif; font-size: 16px; letter-spacing: 0.1em; }
+
+  /* === イベントオーバーレイ === */
+  .event-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .event-overlay.hidden { display: none; }
+  .event-overlay > .event-box { margin: auto; }
+  .event-box { max-width: 540px; width: 100%; background: linear-gradient(180deg, #0d0d18 0%, #050508 100%); border: 2px solid var(--gold); border-radius: 4px; padding: 24px; box-shadow: 0 0 40px rgba(244,209,96,0.15); }
+  .event-tag { font-size: 10px; letter-spacing: 0.4em; color: var(--gold); margin-bottom: 8px; }
+  .event-title { font-family: 'Shippori Mincho', serif; font-size: 22px; font-weight: 800; letter-spacing: 0.1em; margin-bottom: 16px; color: #fff; }
+  .event-desc { font-size: 15px; line-height: 2; margin-bottom: 24px; color: #d8d8d8; min-height: 80px; }
+  .event-choices { display: flex; flex-direction: column; gap: 6px; }
+  .btn-choice { background: #0a0a14; border: 1px solid #404050; padding: 12px 14px; font-size: 14px; text-align: left; letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s; position: relative; padding-left: 28px; line-height: 1.6; }
+  .btn-choice:hover:not(:disabled) { background: #1a1a30; border-color: var(--gold); transform: translateX(2px); }
+  .btn-choice.selected { background: #1a1a30; border-color: var(--gold); }
+  .btn-choice.selected::before { content: '▶'; position: absolute; left: 10px; top: 12px; color: var(--gold); }
+  .btn-choice:disabled { color: #404050; border-color: #202020; cursor: not-allowed; opacity: 0.4; }
+  .btn-choice .choice-cost { display: block; font-size: 10px; color: #707080; margin-top: 4px; letter-spacing: 0.1em; }
+  .btn-choice .choice-cost .danger-cost { color: var(--danger); }
+  .btn-choice .choice-cost .good-cost { color: var(--good); }
+  .event-narration { font-family: 'Shippori Mincho', serif; font-style: italic; color: var(--gold); border-left: 2px solid var(--gold); padding-left: 12px; margin: 12px 0; font-size: 13px; line-height: 2; }
+
+  /* === 戦闘UI === */
+  .battle-ui { display: none; }
+  .battle-ui.active { display: flex; flex-direction: column; }
+  .stage.in-battle .msg-window, .stage.in-battle .dpad, .stage.in-battle #fieldStats { display: none; }
+  .battle-cmd { border: 2px solid #fff; border-radius: 4px; background: linear-gradient(180deg, #0a0a18 0%, #030305 100%); padding: 12px; }
+  .battle-cmd.grid-cmd { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .battle-cmd.text-only { min-height: 90px; font-size: 15px; line-height: 1.9; padding: 14px 18px; }
+  .cmd-btn { background: #030305; border: 1px solid #fff; border-radius: 2px; color: #fff; font-family: 'DotGothic16', monospace; font-size: 16px; letter-spacing: 0.15em; padding: 10px; cursor: pointer; text-align: center; position: relative; }
+  .cmd-btn:hover { background: #1a1a30; }
+  .cmd-btn.selected { background: #2a1818; border-color: var(--gold); }
+  .cmd-btn.selected::before { content: '▶'; position: absolute; left: 6px; color: var(--gold); }
+  .cmd-btn:disabled { color: #444; border-color: #444; cursor: not-allowed; }
+  .cmd-btn .cost { display: block; font-size: 9px; color: var(--danger); letter-spacing: 0.1em; margin-top: 2px; }
+  .battle-stats { border: 2px solid #fff; border-radius: 4px; background: linear-gradient(180deg, #0a0a18 0%, #030305 100%); padding: 8px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; }
+
+  /* === Dパッド === */
+  .dpad { display: none; grid-template-columns: 52px 52px 52px; grid-template-rows: 52px 52px 52px; gap: 4px; justify-content: center; border: 2px solid #fff; border-radius: 4px; padding: 8px; background: linear-gradient(180deg, #0a0a18 0%, #030305 100%); margin: 0 auto; }
+  .dpad button { background: linear-gradient(180deg, #3a2828 0%, #1a1010 100%); border: 1px solid #fff; border-radius: 4px; color: #fff; font-size: 20px; cursor: pointer; }
+  .dpad button:active { filter: brightness(1.5); }
+  .dpad .up { grid-column: 2; grid-row: 1; } .dpad .left { grid-column: 1; grid-row: 2; }
+  .dpad .right { grid-column: 3; grid-row: 2; } .dpad .down { grid-column: 2; grid-row: 3; }
+  .dpad .center { grid-column: 2; grid-row: 2; font-size: 11px; }
+  @media (max-width: 720px) {
+    .dpad { display: grid; }
+    .status-bar { grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 10px; font-size: 12px; }
+    .status-value { font-size: 13px; }
+    .status-label { font-size: 8px; }
+    .battle-stats { grid-template-columns: 1fr 1fr; }
+    body { padding: 6px 6px 16px; }
+    .stage { gap: 5px; }
+    .msg-window { min-height: 70px; padding: 10px 12px; font-size: 13px; line-height: 1.7; }
+    .battle-cmd.text-only { min-height: 70px; font-size: 13px; padding: 10px 12px; line-height: 1.7; }
+    .cmd-btn { padding: 9px 6px; font-size: 14px; letter-spacing: 0.1em; }
+    .event-box { padding: 18px 16px; max-width: 100%; }
+    .event-title { font-size: 18px; margin-bottom: 10px; }
+    .event-desc { font-size: 13px; line-height: 1.8; margin-bottom: 14px; min-height: 60px; }
+    .btn-choice { font-size: 12px; padding: 10px 10px 10px 24px; }
+    .btn-choice.selected::before { top: 10px; }
+    .event-tag { font-size: 9px; }
+    .modal-content { padding: 22px 18px; }
+    .modal-title { font-size: 22px; }
+    .modal-body { font-size: 13px; line-height: 1.9; }
+    .modal-en { font-size: 12px; }
+    .modal-stat { font-size: 11px; }
+  }
+  @media (max-height: 700px) and (max-width: 720px) {
+    .dpad { grid-template-columns: 46px 46px 46px; grid-template-rows: 46px 46px 46px; padding: 6px; }
+    .dpad button { font-size: 18px; }
+  }
+
+  /* === エンディングモーダル === */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.96); z-index: 70; display: flex; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .modal.hidden { display: none; }
+  .modal > .modal-content { margin: auto; }
+  .modal-content { max-width: 540px; width: 100%; background: linear-gradient(180deg, #0a0a18 0%, #030305 100%); border: 2px solid var(--gold); border-radius: 4px; padding: 32px 24px; text-align: center; box-shadow: 0 0 60px rgba(244,209,96,0.2); }
+  .modal-tag { font-size: 10px; letter-spacing: 0.5em; color: var(--gold); margin-bottom: 14px; }
+  .modal-title { font-family: 'Shippori Mincho', serif; font-size: 32px; font-weight: 800; letter-spacing: 0.15em; margin-bottom: 8px; color: #fff; }
+  .modal-en { font-style: italic; color: var(--gold); font-size: 14px; margin-bottom: 24px; letter-spacing: 0.2em; }
+  .modal-body { font-family: 'Shippori Mincho', serif; font-size: 15px; line-height: 2.2; margin-bottom: 20px; color: #d8d8d8; }
+  .modal-stat { color: var(--dim); font-size: 12px; letter-spacing: 0.15em; margin-bottom: 22px; line-height: 1.8; }
+  .modal-stat .gold-stat { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<div class="title-screen" id="titleScreen">
+  <div class="title-main">MEMENTO</div>
+  <div class="title-sub">余命三十日</div>
+  <div class="title-en">A TALE OF THIRTY DAYS</div>
+  <div class="title-quote">
+    <div class="lead">― 人は、二度死ぬと言われている ―</div>
+    一度目は、心臓が止まる時。<br>
+    二度目は、誰かの記憶から<br>消える時。
+  </div>
+  <div class="title-rules">
+    <h3>― 塔を登る者へ ―</h3>
+    <p>● 余命は 限られている。1フロア進むごとに 1日消費する。</p>
+    <p>● 各フロアで 4つの選択肢が提示される。</p>
+    <p>● 選択は静かに 4つの価値観を蓄積する。</p>
+    <p>● 影と遭遇すれば 戦闘になる。</p>
+    <p>● ある瞬間、何を選んでも 潰される。</p>
+    <p>● 死神は、語る者にしか倒せない。</p>
+  </div>
+  <button class="btn-start" onclick="startGame()">塔に 入る</button>
+  <div class="controls-hint">↑↓←→ / WASD / スワイプ で移動<br>スペース / Enter で 決定</div>
+</div>
+
+<div class="stage" id="stage">
+  <div class="status-bar" id="fieldStats">
+    <div class="status-cell"><span class="status-label">よめい</span><span class="status-value" id="lifeDisplay">30日</span></div>
+    <div class="status-cell"><span class="status-label">たいりょく</span><span class="status-value vital" id="vitDisplay">100</span><div class="bar-back"><div class="bar-fill" id="vitBar" style="width:100%"></div></div></div>
+    <div class="status-cell"><span class="status-label">きおく</span><span class="status-value coin" id="coinDisplay">0</span></div>
+    <div class="status-cell"><span class="status-label">Day</span><span class="status-value gold" id="floorDisplay">1 / 30</span></div>
+  </div>
+
+  <div class="battle-stats battle-ui" id="battleStats">
+    <div class="status-cell"><span class="status-label">あなた よめい/たいりょく</span><span class="status-value" id="bLifeDisplay">30 / 100</span></div>
+    <div class="status-cell"><span class="status-label" id="bEnemyName">影</span><span class="status-value" id="bEnemyHp">HP 10 / 10</span></div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="canvas" width="480" height="320"></canvas>
+    <div class="damage-flash" id="dmgFlash"></div>
+    <div class="floor-overlay" id="floorName">― 黎明 ―</div>
+    <div class="day-overlay" id="dayLabel">Day 1</div>
+    <button class="sound-toggle" id="soundToggle" onclick="toggleSound()" title="音のオンオフ">♪</button>
+  </div>
+
+  <div class="msg-window">
+    <div id="logBox"></div>
+  </div>
+
+  <div class="battle-cmd battle-ui text-only" id="battleMsg" style="display:none"><div id="battleMsgText"></div></div>
+  <div class="battle-cmd battle-ui grid-cmd" id="battleCmd" style="display:none">
+    <button class="cmd-btn" data-cmd="attack" onclick="selectCmd('attack')">たたかう</button>
+    <button class="cmd-btn" data-cmd="spell" onclick="selectCmd('spell')">じゅもん<span class="cost">よめい -2</span></button>
+    <button class="cmd-btn" data-cmd="defend" onclick="selectCmd('defend')">ぼうぎょ</button>
+    <button class="cmd-btn" data-cmd="run" onclick="selectCmd('run')">にげる</button>
+  </div>
+
+  <div class="dpad" id="dpad">
+    <button class="up" ontouchstart="event.preventDefault();tryMove(0,-1)" onmousedown="if(!('ontouchstart' in window))tryMove(0,-1)">▲</button>
+    <button class="left" ontouchstart="event.preventDefault();tryMove(-1,0)" onmousedown="if(!('ontouchstart' in window))tryMove(-1,0)">◀</button>
+    <button class="center" ontouchstart="event.preventDefault();openMenu()" onmousedown="if(!('ontouchstart' in window))openMenu()">記憶</button>
+    <button class="right" ontouchstart="event.preventDefault();tryMove(1,0)" onmousedown="if(!('ontouchstart' in window))tryMove(1,0)">▶</button>
+    <button class="down" ontouchstart="event.preventDefault();tryMove(0,1)" onmousedown="if(!('ontouchstart' in window))tryMove(0,1)">▼</button>
+  </div>
+</div>
+
+<!-- イベントオーバーレイ -->
+<div class="event-overlay hidden" id="eventOverlay">
+  <div class="event-box">
+    <div class="event-tag" id="eventTag">― Day 1 ―</div>
+    <div class="event-title" id="eventTitle">目覚め</div>
+    <div class="event-desc" id="eventDesc">―</div>
+    <div class="event-choices" id="eventChoices"></div>
+  </div>
+</div>
+
+<!-- エンディングモーダル -->
+<div class="modal hidden" id="endModal">
+  <div class="modal-content">
+    <div class="modal-tag" id="endTag">EPILOGUE</div>
+    <div class="modal-title" id="endTitle">―</div>
+    <div class="modal-en" id="endEn">―</div>
+    <div class="modal-body" id="endBody">―</div>
+    <div class="modal-stat" id="endStat">―</div>
+    <button class="btn-modal" onclick="resetGame()">もういちど 塔に 入る</button>
+  </div>
+</div>
+
+<script>
+// ============ AUDIO SYSTEM ============
+let audioCtx = null;
+let masterGain = null;
+let musicGain = null;
+let sfxGain = null;
+let currentMusic = null;
+let musicEnabled = true;
+
+function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.6;
+    masterGain.connect(audioCtx.destination);
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.35;
+    musicGain.connect(masterGain);
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.5;
+    sfxGain.connect(masterGain);
+  } catch (e) {
+    console.warn('Audio not available', e);
+  }
+}
+
+function toggleSound() {
+  musicEnabled = !musicEnabled;
+  const btn = document.getElementById('soundToggle');
+  if (musicEnabled) {
+    btn.classList.remove('muted');
+    btn.textContent = '♪';
+    if (masterGain) masterGain.gain.value = 0.6;
+  } else {
+    btn.classList.add('muted');
+    btn.textContent = '♪';
+    if (masterGain) masterGain.gain.value = 0;
+  }
+}
+
+// ノートを音程 (Hz) に変換
+function noteFreq(note) {
+  // C4=60. 440 * 2^((n-69)/12)
+  return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+// 単音再生 (アタック・サスティーン・リリース)
+function playNote(freq, startTime, duration, type='sine', vol=0.3, target=null) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  // ADSR エンベロープ
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(vol, startTime + 0.02);
+  gain.gain.linearRampToValueAtTime(vol * 0.6, startTime + duration * 0.5);
+  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+  osc.connect(gain);
+  gain.connect(target || musicGain);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+  return { osc, gain };
+}
+
+// ノイズ系
+function playNoise(startTime, duration, vol=0.2, filterFreq=2000) {
+  if (!audioCtx) return;
+  const bufferSize = audioCtx.sampleRate * duration;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = filterFreq;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(vol, startTime);
+  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(sfxGain);
+  source.start(startTime);
+}
+
+// === BGM パターン ===
+// 各章のBGMは無限ループのスケジューラ
+function stopMusic() {
+  if (currentMusic) {
+    currentMusic.stop = true;
+    if (currentMusic.nodes) {
+      for (const n of currentMusic.nodes) {
+        try { n.osc.stop(audioCtx.currentTime + 0.05); } catch(e){}
+      }
+    }
+    currentMusic = null;
+  }
+}
+
+function playMusic(chapter) {
+  if (!audioCtx) return;
+  stopMusic();
+  const m = { stop: false, chapter: chapter, nodes: [] };
+  currentMusic = m;
+  if (chapter === 'dawn') playDawn(m);
+  else if (chapter === 'fierce') playFierce(m);
+  else if (chapter === 'iron') playIron(m);
+  else if (chapter === 'pale') playPale(m);
+  else if (chapter === 'battle') playBattle(m);
+  else if (chapter === 'death') playDeath(m);
+}
+
+// 章1: 黎明 - 優しいピアノ風アルペジオ
+function playDawn(m) {
+  // C メジャー: C E G C  (60, 64, 67, 72)
+  const notes = [60, 64, 67, 72, 67, 64];
+  const tempo = 0.4;
+  let i = 0;
+  function schedule() {
+    if (m.stop) return;
+    const t = audioCtx.currentTime;
+    // メロディ
+    const n = playNote(noteFreq(notes[i]), t, tempo * 0.9, 'triangle', 0.18);
+    if (n) m.nodes.push(n);
+    // 低音 (4音ごと)
+    if (i % 4 === 0) {
+      const bn = playNote(noteFreq(48), t, tempo * 3.8, 'sine', 0.12);
+      if (bn) m.nodes.push(bn);
+    }
+    i = (i + 1) % notes.length;
+    setTimeout(schedule, tempo * 1000);
+  }
+  schedule();
+}
+
+// 章2: 彷徨 - 不協和・低音うねり
+function playFierce(m) {
+  // D マイナー基調、不協和音をやや混ぜる
+  const notes = [62, 65, 69, 72, 69, 65, 67, 65];
+  const tempo = 0.32;
+  let i = 0;
+  function schedule() {
+    if (m.stop) return;
+    const t = audioCtx.currentTime;
+    const n = playNote(noteFreq(notes[i]), t, tempo * 0.85, 'sawtooth', 0.13);
+    if (n) m.nodes.push(n);
+    if (i % 2 === 0) {
+      const bn = playNote(noteFreq(38), t, tempo * 1.8, 'sine', 0.18);
+      if (bn) m.nodes.push(bn);
+    }
+    // 低音のうねり
+    if (i === 0) {
+      const dn = playNote(noteFreq(50), t, tempo * 7, 'triangle', 0.08);
+      if (dn) m.nodes.push(dn);
+    }
+    i = (i + 1) % notes.length;
+    setTimeout(schedule, tempo * 1000);
+  }
+  schedule();
+}
+
+// 章3: 建造 - 機械的・規則的
+function playIron(m) {
+  const notes = [55, 55, 58, 55, 60, 55, 58, 55];
+  const tempo = 0.28;
+  let i = 0;
+  function schedule() {
+    if (m.stop) return;
+    const t = audioCtx.currentTime;
+    const n = playNote(noteFreq(notes[i]), t, tempo * 0.4, 'square', 0.1);
+    if (n) m.nodes.push(n);
+    // 一定のキック
+    if (i % 4 === 0) {
+      const kn = playNote(40, t, 0.15, 'sine', 0.25);
+      if (kn) m.nodes.push(kn);
+    }
+    // 高音のティック
+    if (i % 2 === 1) {
+      const tn = playNote(noteFreq(72), t, 0.05, 'square', 0.04);
+      if (tn) m.nodes.push(tn);
+    }
+    i = (i + 1) % notes.length;
+    setTimeout(schedule, tempo * 1000);
+  }
+  schedule();
+}
+
+// 章4: 薄明 - 単音と残響、ほぼ無音
+function playPale(m) {
+  // 長い間隔で 1 音ずつ
+  const notes = [60, 67, 64, 72, 67];
+  const tempo = 2.5;
+  let i = 0;
+  function schedule() {
+    if (m.stop) return;
+    const t = audioCtx.currentTime;
+    // 長く伸ばす美しい音
+    const n = playNote(noteFreq(notes[i]), t, tempo * 0.9, 'sine', 0.15);
+    if (n) m.nodes.push(n);
+    // オクターブ上のかすかな響き
+    const hn = playNote(noteFreq(notes[i] + 12), t + 0.1, tempo * 0.7, 'sine', 0.06);
+    if (hn) m.nodes.push(hn);
+    i = (i + 1) % notes.length;
+    setTimeout(schedule, tempo * 1000);
+  }
+  schedule();
+}
+
+// 戦闘: 緊迫したループ
+function playBattle(m) {
+  const notes = [55, 58, 62, 58, 60, 58, 62, 65];
+  const tempo = 0.18;
+  let i = 0;
+  function schedule() {
+    if (m.stop) return;
+    const t = audioCtx.currentTime;
+    const n = playNote(noteFreq(notes[i]), t, tempo * 0.7, 'sawtooth', 0.13);
+    if (n) m.nodes.push(n);
+    if (i % 2 === 0) {
+      const bn = playNote(noteFreq(38), t, tempo * 1.5, 'sine', 0.2);
+      if (bn) m.nodes.push(bn);
+    }
+    i = (i + 1) % notes.length;
+    setTimeout(schedule, tempo * 1000);
+  }
+  schedule();
+}
+
+// 死神: 低く重い長音
+function playDeath(m) {
+  const tempo = 4;
+  function schedule() {
+    if (m.stop) return;
+    const t = audioCtx.currentTime;
+    // 重低音
+    const n1 = playNote(noteFreq(36), t, tempo * 0.95, 'sine', 0.22);
+    if (n1) m.nodes.push(n1);
+    // 不協和な響き
+    const n2 = playNote(noteFreq(37), t + 0.5, tempo * 0.7, 'sine', 0.1);
+    if (n2) m.nodes.push(n2);
+    setTimeout(schedule, tempo * 1000);
+  }
+  schedule();
+}
+
+// === SFX ===
+function sfxBlip(freq=800, dur=0.06) {
+  if (!audioCtx) return;
+  playNote(freq, audioCtx.currentTime, dur, 'square', 0.2, sfxGain);
+}
+
+function sfxHit() {
+  if (!audioCtx) return;
+  playNoise(audioCtx.currentTime, 0.15, 0.3, 800);
+  playNote(120, audioCtx.currentTime, 0.1, 'sawtooth', 0.25, sfxGain);
+}
+
+function sfxHurt() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  playNote(220, t, 0.15, 'sawtooth', 0.3, sfxGain);
+  playNote(180, t + 0.05, 0.15, 'sawtooth', 0.2, sfxGain);
+}
+
+function sfxVictory() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  playNote(noteFreq(60), t, 0.12, 'triangle', 0.25, sfxGain);
+  playNote(noteFreq(64), t + 0.1, 0.12, 'triangle', 0.25, sfxGain);
+  playNote(noteFreq(67), t + 0.2, 0.18, 'triangle', 0.3, sfxGain);
+}
+
+function sfxLevelUp() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const seq = [60, 64, 67, 72];
+  seq.forEach((n, i) => playNote(noteFreq(n), t + i * 0.08, 0.15, 'triangle', 0.25, sfxGain));
+}
+
+function sfxGameOver() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  playNote(noteFreq(60), t, 0.3, 'triangle', 0.25, sfxGain);
+  playNote(noteFreq(55), t + 0.3, 0.4, 'triangle', 0.22, sfxGain);
+  playNote(noteFreq(48), t + 0.7, 0.8, 'triangle', 0.2, sfxGain);
+}
+
+function sfxUnfair() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  // 低音の不協和音
+  playNote(80, t, 0.5, 'sawtooth', 0.3, sfxGain);
+  playNote(85, t, 0.5, 'sawtooth', 0.25, sfxGain);
+  playNoise(t, 0.4, 0.2, 1500);
+}
+
+function sfxStair() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  playNote(noteFreq(72), t, 0.08, 'sine', 0.2, sfxGain);
+  playNote(noteFreq(76), t + 0.06, 0.08, 'sine', 0.2, sfxGain);
+}
+
+
+// ============ CONFIG ============
+const TILE = 20, SCALE = 1, GRID_W = 24, GRID_H = 16;
+const MOVE_DURATION = 130;
+const START_LIFE = 45;
+const START_VIT = 100;
+
+// 章定義
+const CHAPTERS = [
+  { id: 1, name: '黎明', en: 'Daybreak', days: [1, 7], biome: 'dawn', music: 'soft', theme: '無垢と最初の問い' },
+  { id: 2, name: '彷徨', en: 'Wandering', days: [8, 16], biome: 'fierce', music: 'sharp', theme: '運命の職業と理不尽' },
+  { id: 3, name: '建造', en: 'Construct', days: [17, 23], biome: 'iron', music: 'mech', theme: '誠実か、勝つか' },
+  { id: 4, name: '薄明', en: 'Twilight', days: [24, 30], biome: 'pale', music: 'silent', theme: '終わりに残るもの' },
+];
+
+function getChapter(day) {
+  for (const c of CHAPTERS) if (day >= c.days[0] && day <= c.days[1]) return c;
+  return CHAPTERS[3];
+}
+
+// パラメータ蓄積 (闘志=fight, 受容=accept, 解放=escape, 覚醒=observe)
+// プレイヤーに数値は見せない、最後だけ
+
+// ============ EVENTS DATA ============
+// 各 Day のイベント定義。choices は [text, effect] の配列
+// effect: { life, vit, coin, fight, accept, escape, observe, item, unlock, narration, battle, special }
+
+const EVENTS = {
+1: {
+  title: '目覚め',
+  desc: '扉の前に立っている。何も思い出せない。\nここがどこなのか。なぜ自分は ここにいるのか。\n背後には 階段が続いている。',
+  choices: [
+    { t: '扉を開ける', e: { life: -1, fight: 1, narration: '扉は重い。だが あなたは押し開けた。' } },
+    { t: '扉をノックする', e: { life: -1, accept: 1, narration: 'ノックの音は 廊下に消えていった。' } },
+    { t: '鍵穴を覗く', e: { life: -1, observe: 1, narration: '向こう側に なにかが見える 気がした。' } },
+    { t: '振り返る', e: { life: -1, escape: 1, narration: '階段の下は 闇に沈んでいる。' } },
+  ],
+},
+2: {
+  title: '最初の出会い',
+  desc: '踊り場に 小さな子どもが座っている。\n靴を 履いていない。\n「ねえ、なんで登るの?」と聞かれる。',
+  choices: [
+    { t: '「上に行くため」', e: { life: -1, fight: 1, narration: '子どもは ふうんと言った。' } },
+    { t: '「分からない」', e: { life: -1, observe: 2, narration: '子どもは 笑った。「正直だね」' } },
+    { t: '「君は?」と聞く', e: { life: -1, coin: 3, observe: 1, accept: 1, narration: '「ぼく、お母さんを待ってるの」\n子どもの目は どこか遠くを見ていた。', special: 'met_child' } },
+    { t: '黙って通り過ぎる', e: { life: 0, escape: 1, narration: '子どもは 何も言わなかった。' } },
+  ],
+},
+3: {
+  title: '光の部屋',
+  desc: '眩しい光が差し込む 部屋。\n「楽しかった頃」の残像が 空中に漂っている。\n手を伸ばせば 触れられそうな距離。',
+  choices: [
+    { t: '残像に触れる', e: { life: -3, coin: 5, accept: 2, narration: '思い出が 鮮明に蘇る。\n胸が熱くなる。だが もう戻れない。' } },
+    { t: '静かに眺める', e: { life: -1, observe: 2, narration: '光は 静かに揺れている。' } },
+    { t: '「もう戻れない」と呟いて去る', e: { life: -1, escape: 2, narration: '振り返らずに 階段を上る。' } },
+    { t: '走って通り抜ける', e: { life: 0, vit: -3, fight: 1, narration: '光の中を 走り抜けた。' } },
+  ],
+},
+4: {
+  title: '最初の傷',
+  desc: '壁に 古い落書きがある。\n「あの時、君を傷つけた」と 読める。\n自分の字に 似ている気もする。',
+  choices: [
+    { t: '落書きを消す', e: { life: -3, accept: 2, narration: '落書きは 静かに消えた。\n手のひらに 黒い粉が残った。' } },
+    { t: '隣に何か書く', e: { life: -1, observe: 1, coin: 2, narration: '「ごめん」と 書いた。\n壁の落書きが 少しだけ薄くなった。' } },
+    { t: '写真に撮る', e: { life: -1, observe: 2, item: 'first_wound', narration: 'アイテム「最初の傷」を 手に入れた。' } },
+    { t: '目を逸らす', e: { life: 0, escape: 2, narration: '見なかったことにした。' } },
+  ],
+},
+5: {
+  title: '風との出会い',
+  desc: '階段で 軽やかな登塔者と すれ違う。\n素足で、荷物を 持っていない。\n「重いものを持ってると しんどいよ」と笑う。',
+  choices: [
+    { t: '話しかける', e: { life: -1, accept: 1, observe: 1, unlock: 'release', narration: '風（かぜ）と名乗った。\n第5選択肢「手放す」を 覚えた。' } },
+    { t: '並んで登る', e: { life: -1, coin: 2, narration: '少しのあいだ 一緒に登った。\n軽い 会話だけ。' } },
+    { t: '距離を置く', e: { life: 0, escape: 1, narration: '風は 何も言わずに 行ってしまった。' } },
+    { t: '立ち止まって見送る', e: { life: 0, observe: 1, narration: '風は 振り返らなかった。' } },
+  ],
+},
+6: {
+  title: '記録する者',
+  desc: '踊り場で 地味な服装の人が 手帳に書いている。\n「忘れたくない、っていうのは\n もしかしたら 執着なのかな」\nと呟いた。',
+  choices: [
+    { t: '何を書いているか聞く', e: { life: -1, observe: 2, coin: 3, unlock: 'record', narration: 'シキ（識）と名乗った。\n第5選択肢「記録する」を 覚えた。' } },
+    { t: '「忘れたくないの?」と問う', e: { life: -1, observe: 2, accept: 1, narration: '「忘れたら、その人は\nもう一度 死ぬから」' } },
+    { t: '手帳を覗く', e: { life: -1, coin: 5, observe: 1, narration: '自分の名前が 書かれていた。\nあなたは 言葉を失った。' } },
+    { t: '通り過ぎる', e: { life: 0, escape: 1, narration: 'シキは 顔を上げなかった。' } },
+  ],
+},
+7: {
+  title: '最初の選択',
+  desc: '塔が 二股に分かれる。\n左は 明るく、賑やか。\n右は 暗く、静か。\nどちらにも 進める。',
+  choices: [
+    { t: '左を選ぶ（華やかな道）', e: { life: -1, fight: 2, narration: '光と歓声の方へ 足を踏み出した。' } },
+    { t: '右を選ぶ（静かな道）', e: { life: -1, observe: 2, narration: '静寂の方へ 足を踏み出した。' } },
+    { t: '真ん中で座り込む', e: { life: -2, coin: 3, observe: 2, narration: 'しばらく 動けなかった。\nやがて 立ち上がった。\n選んだのは どちらでもなかった。' } },
+    { t: '戻ろうとする', e: { life: -1, escape: 1, narration: '振り返ったが、もう\n降りる階段は なかった。' } },
+  ],
+},
+8: {
+  title: '二つの扉',
+  desc: '踊り場に 二つの扉。\n左の扉から 歓声。\n右の扉から 静かな手仕事の音。',
+  choices: [
+    { t: '左の扉を開ける', e: { life: -3, fight: 2, narration: '光と音が なだれ込んでくる。\nだが あなたは すぐに圧倒された。' } },
+    { t: '右の扉を開ける', e: { life: -1, observe: 2, coin: 3, narration: '誰かが 黙々と何かを作っている。\n邪魔をしないように 見ていた。' } },
+    { t: '踊り場で座り込む', e: { life: -1, observe: 2, accept: 1, narration: 'どちらも 選びたくなかった。' } },
+    { t: '階段を駆け上がる', e: { life: 0, vit: -8, fight: 2, escape: 2, narration: '振り返らずに 駆け抜けた。' } },
+  ],
+},
+9: {
+  title: '明るい登塔者',
+  desc: '「行こう! 上の階、絶対 面白いって!」\nアサ（朝）と名乗った 登塔者が 手を引く。\n目は 明るい。だが時々\n ふと 遠くを見る。',
+  choices: [
+    { t: '一緒に走る', e: { life: -1, vit: -8, fight: 2, escape: 1, narration: '風を切って 階段を駆け上がる。' } },
+    { t: 'ゆっくり付いていく', e: { life: -1, coin: 2, accept: 1, narration: 'アサは ペースを 落としてくれた。' } },
+    { t: '「どうしてそんなに急ぐの?」', e: { life: -1, coin: 5, observe: 2, narration: '「立ち止まったら 負けだと思ってる。\n……ごめん、今のは 嘘」' } },
+    { t: '別の階段を選ぶ', e: { life: 0, escape: 2, narration: 'アサは 振り返らずに 行ってしまった。' } },
+  ],
+},
+10: {
+  title: '比較の鏡',
+  desc: 'フロアに 巨大な鏡。\n自分より輝いている 誰かが 映っている。\nその誰かは 笑っていた。',
+  choices: [
+    { t: '鏡を割る', e: { life: -3, vit: -15, fight: 3, narration: '破片が 床に散らばる。\n手から 血が滲んだ。' } },
+    { t: '鏡に向かって笑う', e: { life: -1, accept: 2, coin: 3, narration: 'あの人は あの人だ。\n少し だけ 楽になった。' } },
+    { t: '「あの人と私は別の人間だ」', e: { life: -1, observe: 3, coin: 5, narration: '鏡の中の人は 静かに消えていった。' } },
+    { t: '目を逸らして登る', e: { life: 0, escape: 2, narration: '見なかったことにした。' } },
+  ],
+},
+11: {
+  title: '運命の職業',
+  desc: 'フロアに 三つの机。\n左には 筆。右には ハンマー。\n真ん中の机は 空白。\nどれを 選んでも いい気がする。',
+  choices: [
+    { t: '筆を取る', e: { life: -2, observe: 2, coin: 5, narration: '表現の道を 選んだ過去が 蘇る。\n胸が締めつけられた。' } },
+    { t: 'ハンマーを取る', e: { life: -2, fight: 2, coin: 5, narration: '物を作る道を 選んだ過去が 蘇る。\n手のひらに 重みを感じた。' } },
+    { t: '空白の机に手を置く', e: { life: -3, observe: 3, coin: 8, narration: '「選ばなかった三つ目の道」が\n音もなく 立ち上がった。\nあなたは それを 見つめた。' } },
+    { t: '何も取らずに進む', e: { life: -1, escape: 2, narration: '机は 静かに残された。' } },
+  ],
+},
+// === 理不尽 1: Day 12 出る杭 ===
+12: {
+  title: '出る杭',
+  desc: '階段を 登りきると 机がひとつ。\nそこに あなたの提出物が 置かれている。\nあの頃 必死で作ったもの。\n誰かに見せて 評価されたかったもの。\n部屋の奥から 誰かが 歩いてくる。\n顔は 見えない。だが 声が 聞こえる。\n\n「で? これがお前の答えか?」',
+  choices: [
+    { t: '「はい、自信があります」', e: { vit: -10, fight: 2 } },
+    { t: '「まだ未完成ですが」', e: { vit: -5, observe: 1 } },
+    { t: '「ご意見をください」', e: { vit: -5, coin: 5, observe: 2 } },
+    { t: '提出物を引っ込める', e: { vit: -5, escape: 1 } },
+  ],
+  unfair: {
+    afterText: '声の主は 提出物を 一瞥して言う。\n「ふん。やり直し」\n机の上の 提出物は 勝手に破られて 消える。\nあなたは 何も 言えない。',
+    forcedDamage: { life: -8, vit: -15, coin: 5, fight: 5 },
+    forcedMsg: '― 余命 -8日 ／ 体力 -15 ／ 記憶 +5 ―',
+  },
+},
+13: {
+  title: '仲間との別れ',
+  desc: 'これまで 同行してくれていた者が\n別の階段へ 向かおうとしている。\n「ここでお別れだ」\n振り返らずに 言った。',
+  choices: [
+    { t: '引き止める', e: { life: -2, fight: 1, narration: '彼は 少し迷ったが\n結局 去っていった。' } },
+    { t: '「ありがとう」と送り出す', e: { life: -1, accept: 3, coin: 5, narration: '彼は 振り返って\n小さく 手を振った。' } },
+    { t: '何も言わずに見送る', e: { life: -1, observe: 1, narration: '足音だけが 遠ざかった。' } },
+    { t: '自分も別の階段に行こうとする', e: { life: -1, escape: 1, narration: '結局 戻ってきた。\n仲間の姿は もうなかった。' } },
+  ],
+},
+// === 理不尽 2: Day 14 見えない天井 ===
+14: {
+  title: '見えない天井',
+  desc: '階段を 登ろうとする。\nだが 何かが 見えない壁のように 進路を遮る。\n手をかざしても 何もない。だが進めない。\n上では 誰かが 軽やかに登っている。\nあなたと 同じ階段なのに。\n横の階段では 別の誰かが 軽々と上がっていく。',
+  choices: [
+    { t: '力ずくで突き破る', e: { vit: -30, fight: 3 } },
+    { t: '別の道を探す', e: { vit: -10, escape: 2 } },
+    { t: '待ってみる', e: { vit: -5, accept: 2 } },
+    { t: '「なぜ俺だけ?」と問う', e: { vit: -5, observe: 3 } },
+  ],
+  unfair: {
+    afterText: 'どれを選んでも 見えない壁は 崩れない。\n力で殴れば 体力が削れるだけ。\n別の道を探しても すべての階段に 同じ壁がある。\n待っても 壁は消えない。問うても 答えは 返ってこない。\n\n最終的に あなたは 進むのを諦める。\n気づいたら 壁は消えている。\nだが 横の階段の登塔者は もうずっと先に行っている。',
+    forcedDamage: { life: -8, coin: 10, fight: 3, observe: 3 },
+    forcedMsg: '― 余命 -8日 ／ 記憶 +10 ―',
+  },
+},
+15: {
+  title: '酒に酔った男',
+  desc: '踊り場で ハル（春）と名乗る男が\n酒を 飲んでいる。\n「俺、ここまで全部、正解だと思って\n登ってきたんだよ」\n自嘲的に 笑った。',
+  choices: [
+    { t: '隣に座る', e: { life: -2, observe: 2, coin: 8, accept: 1, narration: '「上の階に何があるか\nもう想像つくだろ?」\nハルは 遠い目をした。' } },
+    { t: '「飲みすぎだよ」', e: { life: -1, accept: 1, narration: 'ハルは 少し笑った。\n「お前、優しいな」' } },
+    { t: '通り過ぎる', e: { life: 0, escape: 1, narration: 'ハルは 何も言わなかった。' } },
+    { t: '一杯もらう', e: { life: -1, item: 'liquor_left', narration: 'アイテム「飲み残しの酒」を\n手に入れた。' } },
+  ],
+},
+16: {
+  title: '中間地点',
+  desc: '塔の 中ほど。\n下を 見下ろせる。\nこれまでの 選択の残光が 見える。\n理不尽に 削られた時間も 見える。\n上を 見上げる。まだ 半分以上 残っている。',
+  choices: [
+    { t: 'じっと見つめる', e: { life: -2, observe: 3, coin: 5, narration: '長い時間 立ち止まった。\nなぜ ここまで来たのか\n少しだけ 分かった気がする。' } },
+    { t: 'すぐ上を向く', e: { life: -1, fight: 2, narration: '振り返っても 仕方ない。' } },
+    { t: '戻れないか試す', e: { life: -2, escape: 1, narration: '階段は あるはずなのに\n降りられなかった。' } },
+    { t: '大声で叫ぶ', e: { life: -1, vit: -3, fight: 2, narration: '声は 塔の中で反響して\n消えていった。' } },
+  ],
+},
+17: {
+  title: '黒衣の登塔者',
+  desc: '隣の階段を 黒衣の誰かが\n同じ速度で 登っている。\n顔は 見えない。\n「お前は 間違った道を選んでいる」\nと 声がした。',
+  choices: [
+    { t: '受け流す', e: { life: 0, observe: 1, narration: '黒衣は 静かに登り続けた。' } },
+    { t: '反論する', e: { life: -1, fight: 2, narration: '黒衣は 嘲笑った。\nやがて 姿が消えた。' } },
+    { t: '「お前は何のために登っているのか?」', e: { life: -1, observe: 3, coin: 5, special: 'asked_dark', narration: '黒衣は 答えに詰まり\n音もなく 消えた。' } },
+    { t: '自分も黒い服を着る', e: { life: -2, fight: 3, narration: '体が 重くなった。' } },
+  ],
+},
+18: {
+  title: '所有の部屋',
+  desc: 'フロアいっぱいに 自分が手に入れたものが\n積み上がっている。\n持ち物。称号。役職。誰かの好意。\nすべて 自分の足元に 山となっている。',
+  choices: [
+    { t: '全部抱えて進む', e: { life: -3, vit: -15, fight: 1, narration: '体が 重い。\n階段が 一段一段 きつくなる。' } },
+    { t: '半分を置いていく', e: { life: -1, accept: 2, coin: 3, narration: '何を残し 何を置くか\n選ばなければならなかった。' } },
+    { t: '全部置いていく', e: { life: 0, accept: 4, coin: 8, unlock: 'release', narration: '体が 軽くなった。\n第5選択肢「手放す」を 覚えた。' } },
+    { t: '火をつける', e: { life: -2, vit: -10, fight: 5, narration: '炎は 静かに広がった。\nあなたは 振り返らずに 階段を登った。' } },
+  ],
+},
+19: {
+  title: '一行の嘘',
+  desc: '取引のテーブル。\nかつての自分が 向かいに 座っている。\n一行 嘘を書けば すべてうまくいく。\nそう 告げられた。\nペンが 差し出される。',
+  choices: [
+    { t: '一行、嘘を書く', e: { life: 2, fight: 1, narration: '何かが 永遠に失われた気がした。\nだが 余命は 増えた。' } },
+    { t: 'ペンを置く', e: { life: -3, accept: 3, coin: 10, unlock: 'hidden_npc', narration: 'かつての自分は 静かに頷いた。\n「お前は お前のままだな」' } },
+    { t: '書類を破る', e: { life: -1, fight: 3, narration: '紙片が 床に散った。' } },
+    { t: '「なぜ嘘をつくのか」と問う', e: { life: -1, observe: 3, coin: 5, narration: 'かつての自分は 答えなかった。' } },
+  ],
+},
+// === 理不尽 3: Day 20 成果の塔 ===
+20: {
+  title: '成果の塔',
+  desc: 'フロアの壁全面に あなたの業績が 刻まれている。\n評価された仕事。達成した目標。\n誰かに認められた 数字。\nあなたは 満足そうに 眺める。\nふと 壁の文字が 震える。\n業績の上に 別の文字が 浮かび上がる。\n\n「これは お前のためだったか?」',
+  choices: [
+    { t: '「俺のためだ」と頷く', e: { fight: 3, coin: 2 } },
+    { t: '「分からない」', e: { observe: 5, coin: 8 } },
+    { t: '「違う、と思う」', e: { accept: 5, coin: 10 } },
+    { t: '壁から目を逸らす', e: { escape: 1 } },
+  ],
+  unfair: {
+    afterText: 'あなたが 何を答えても\n壁の業績は ゆっくりと 消えていく。\nまるで 最初から なかったかのように。\n後に残るのは 何も書かれていない 壁だけ。',
+    forcedDamage: { life: -5 },
+    forcedMsg: '― 余命 -5日 ―',
+  },
+},
+21: {
+  title: 'かつての友',
+  desc: '思い出せない 顔。\n「久しぶりだな。覚えてるか?」\n「お前は 俺との約束を 果たさなかったよな」\n責めるような 口調ではない。\nただ 確認するような 声。',
+  choices: [
+    { t: '「ごめん、覚えてない」', e: { life: -1, narration: '友は 寂しく笑って 消えた。' } },
+    { t: '思い出そうとする', e: { life: -3, observe: 3, coin: 10, item: 'broken_promise', narration: '約束の内容が 蘇った。\nアイテム「果たせなかった約束」を\n手に入れた。' } },
+    { t: '「お前は誰だ?」と問う', e: { life: -1, observe: 2, narration: '「お前自身だよ」\n友は そう答えて 消えた。' } },
+    { t: '友の手を取る', e: { life: -2, accept: 5, narration: '手は 温かかった。\n何も 言葉は要らなかった。' } },
+  ],
+},
+22: {
+  title: '成功した自分',
+  desc: '身なりの整った 自分が 立っている。\n「やあ、君が "こうなれなかった私" か」\n「君が 選ばなかった道で\n私は ここまで来た」',
+  choices: [
+    { t: '「悔しい」', e: { life: -2, fight: 3, narration: 'もう一人の自分は 微笑んだ。' } },
+    { t: '「これでよかった」', e: { life: -1, accept: 3, narration: 'もう一人の自分は 頷いた。' } },
+    { t: '「お前も俺だ」', e: { life: -2, observe: 3, coin: 10, special: 'accepted_other', narration: 'もう一人の自分は 静かに 微笑み\n音もなく 消えた。' } },
+    { t: '無視する', e: { life: 0, escape: 2, narration: 'もう一人の自分は\n少しの間 そこに立っていた。' } },
+  ],
+},
+23: {
+  title: '執着の総和',
+  desc: 'これまで 集めたすべての執着が\n形を取って 現れる。\n理不尽への怒りも 嫉妬も 後悔も。\nそれらは あなたを 取り囲み\nじっと 見つめている。',
+  choices: [
+    { t: '全力で戦う', e: { life: -5, vit: -30, fight: 10, narration: '激しい戦いだった。\n勝利した者は 立っているだけで 精一杯だった。', requires: { vit: 40 } } },
+    { t: '一つひとつに名前を呼ぶ', e: { life: -3, accept: 5, coin: 10, narration: '怒り。嫉妬。後悔。\n名前を呼ぶたびに 一つずつ 消えていった。' } },
+    { t: '「ありがとう」と告げる', e: { life: -2, accept: 7, coin: 15, special: 'thanked_attachment', requires: { coin: 10 }, narration: 'すべては 静かに 消えていった。\n感謝が 執着を 解いた。' } },
+    { t: '走り抜ける', e: { life: -1, vit: -10, escape: 2, narration: '振り返らなかった。\nだが 影は 次のフロアで 待っている気がした。' } },
+  ],
+},
+24: {
+  title: '老人マコト',
+  desc: '最終層に 最も近い 踊り場。\n白髪の老人が 椅子に 座っている。\n「私の 余命は もう 3日だ。\n だから 急ぐ理由が ない」\n穏やかな目で あなたを見た。',
+  choices: [
+    { t: '隣に座って話を聞く', e: { life: -3, observe: 3, coin: 15, item: 'last_words', narration: '「人生は 選んだ道の結果じゃない。\n選ばなかった道に\n何を残したかで決まる」\nアイテム「最期の言葉」を\n手に入れた。' } },
+    { t: '短く挨拶して進む', e: { life: -1, escape: 1, narration: 'マコトは 小さく頷いた。' } },
+    { t: '「あなたも登っているのか」', e: { life: -1, observe: 2, narration: '「私は もう登らない。\nここで 見ている」' } },
+    { t: '黙礼して通り過ぎる', e: { life: 0, narration: 'マコトの 視線を背中に感じた。' } },
+  ],
+},
+25: {
+  title: '走馬灯',
+  desc: 'フロア全体に これまでの景色が\n同時に 映し出される。\n理不尽だった日々も含めて。\n光と影が 折り重なる。\n一瞬で すべてを 思い出しそうになる。',
+  choices: [
+    { t: '一つひとつ確かめる', e: { life: -3, observe: 5, coin: 15, narration: 'すべてを 確かに見た。\n忘れていた瞬間も 含めて。' } },
+    { t: '全部を一目で受け止める', e: { life: -2, accept: 5, coin: 10, narration: '美しかった。\nそれだけだった。' } },
+    { t: '目を閉じる', e: { life: -1, escape: 2, narration: '「もう 見なくていい」\nそう 声がした。' } },
+    { t: '走り抜ける', e: { life: -1, vit: -10, escape: 2, narration: '景色は 後ろに 流れていった。' } },
+  ],
+},
+26: {
+  title: '母',
+  desc: '優しい目をした女性が 立っている。\n「あなたが ここまで来てくれて 嬉しい」\n「私は もう先に行くね」\n「最後に 聞いてもいい?\n――あなたは 幸せだった?」',
+  choices: [
+    { t: '「うん」', e: { life: -1, accept: 2, coin: 5, special: 'mother_yes', narration: '母は 微笑んで 消えた。' } },
+    { t: '「分からない」', e: { life: -1, observe: 2, coin: 5, special: 'mother_unsure', narration: '「それで いいのよ」\n母は 静かに 頷いた。' } },
+    { t: '「ごめん」', e: { life: -2, accept: 3, coin: 8, special: 'mother_sorry', narration: '「謝らなくて いいの」\n母は 首を振った。' } },
+    { t: '何も言わない', e: { life: -1, special: 'mother_silent', narration: '母は 手を伸ばしたが\n届かなかった。' } },
+  ],
+},
+27: {
+  title: '二度目の死',
+  desc: 'ぼやけた顔の人々が 並んでいる。\n「私たちを 覚えていますか?」\n何人もの声が 重なって聞こえる。\n顔は 思い出せない。\nだが 全員と どこかで 会った気がする。',
+  choices: [
+    { t: '「ごめんなさい、思い出せない」', e: { life: -1, accept: 1, narration: 'その人たちは 微笑んで\n一人ずつ 消えていった。' } },
+    { t: '必死に思い出す', e: { life: -3, observe: 4, coin: 15, item: 'memory_fragment', narration: 'いくつかの 顔が 蘇った。\nアイテム「記憶のかけら」を\n手に入れた。' } },
+    { t: '「あなたも、私を覚えていますか?」', e: { life: -1, observe: 5, coin: 8, narration: '「忘れません」\n声が 重なって聞こえた。' } },
+    { t: '目を逸らす', e: { life: 0, escape: 1, narration: '人々は 静かに 立っていた。' } },
+  ],
+},
+28: {
+  title: '鏡の間',
+  desc: 'フロア全体が 鏡。\nすべての方向に これまでの選択をした\n「自分」が 映る。\n戦った自分。受け入れた自分。\n逃げた自分。見つめた自分。',
+  choices: [
+    { t: 'すべての自分を見つめる', e: { life: -2, observe: 5, coin: 10, narration: 'どれも 自分だった。\nどれも 等しく 自分だった。' } },
+    { t: '一つの自分に話しかける', e: { life: -2, accept: 3, narration: '鏡の中の自分は\n小さく 頷いた。' } },
+    { t: '鏡の中の自分と握手する', e: { life: -2, accept: 5, special: 'mirror_handshake', requires: { coin: 20 }, narration: '手のひらが 触れた。\n温かかった。' } },
+    { t: '鏡を割る', e: { life: -3, vit: -25, fight: 10, requires: { vit: 25 }, narration: '破片が 床に散る。\nどの破片にも 自分が映っていた。' } },
+  ],
+},
+29: {
+  title: '撮影者',
+  desc: '顔の 見えない誰かが\nカメラを 構えている。\n「あなたを 撮らせてもらっています」\n「これは あなたが 二度目の死を\n迎えないための 記録です」',
+  choices: [
+    { t: '「撮らないでくれ」', e: { life: 0, escape: 1, narration: '撮影者は 静かに 去った。' } },
+    { t: '「ありがとう」', e: { life: 0, accept: 2, special: 'thanked_camera', narration: '撮影者は 頷いた。\nすべての選択が 記録された。' } },
+    { t: '「あなたは誰だ?」', e: { life: -1, observe: 3, coin: 5, narration: '「これを作った者です」\n撮影者は 静かに 答えた。' } },
+    { t: 'カメラの前で笑う', e: { life: -1, accept: 1, narration: '撮影者は 何かを 撮った。' } },
+  ],
+},
+// Day 30 は死神戦専用、別ロジック
+};
+
+// ============ STATE ============
+let state = null;
+let inputLocked = false;
+let battle = null;
+let cmdMenuIdx = 0;
+const CMD_ORDER = ['attack', 'spell', 'defend', 'run'];
+
+function newState() {
+  return {
+    day: 1, life: START_LIFE, vit: START_VIT,
+    coin: 0,
+    fight: 0, accept: 0, escape: 0, observe: 0,
+    items: {}, unlocks: {}, specials: {},
+    unfairCount: 0, killCount: 0, totalSteps: 0,
+    map: null, biome: 'dawn',
+    player: { x: 1, y: 1, dir: 0, px: 32, py: 32, walkFrame: 0 },
+    enemies: [], stair: null,
+    eventDone: false, gameOver: false, inBattle: false,
+    animFrame: 0,
+  };
+}
+
+// ============ パレット & スプライト ============
+const PAL = {
+  '.': null, 's': '#f8c8a0', 'h': '#5a2818',
+  'k': '#1a0e20', 'K': '#0a0410', 'r': '#c83830',
+  'q': '#ff8898', 'y': '#ffd860',
+  'b': '#3858c0', 'B': '#2a4090', 'u': '#2a3a78',
+  'n': '#5a2818', 'N': '#3a1810',
+  'w': '#ffffff', 'W': '#c8c8c8',
+  'A': '#2a2030', 'a': '#4a3850', 'E': '#181020',
+  'p': '#9a48c8', 'g': '#c878e8', 'G': '#6a2098',
+  'c': '#d8e8f8', 'C': '#a8c0d8',
+  'l': '#90c878', 'L': '#588838', 'H': '#385020',
+  'd': '#2a3868', 'X': '#888888', 'x': '#aaaaaa',
+  'o': '#ff9050', 'O': '#c86028',
+  'm': '#c8a8e8', 'M': '#7050a0',
+};
+
+const SPRITES = {
+  heroD_0: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbwwwwwwwwbK..","..KbwwwwwwwwwK..","..KKKKKKKKKKKK..","..KnnssssssnnK..","..KnsskkssksskK.","..KnssssssssskK.","..KnsssssssssnK.","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKrrrrrrrrKK..","..KKKKKKKKKKKK..","....KnnKKnnK....","....KKK..KKK...."],
+  heroD_1: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbwwwwwwwwbK..","..KbwwwwwwwwwK..","..KKKKKKKKKKKK..","..KnnssssssnnK..","..KnsskkssksskK.","..KnssssssssskK.","..KnsssssssssnK.","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKrrrrrrrrKK..","..KKKKKKKKKKKK..","....KnnK.KKK....","....KKK..KKK...."],
+  heroD_2: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbwwwwwwwwbK..","..KbwwwwwwwwwK..","..KKKKKKKKKKKK..","..KnnssssssnnK..","..KnsskkssksskK.","..KnssssssssskK.","..KnsssssssssnK.","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKrrrrrrrrKK..","..KKKKKKKKKKKK..","....KKK.KnnK....","....KKK..KKK...."],
+  heroU_0: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbbbbbbbbbbK..","..KbbbwwwbbbbK..","..KKKKKKKKKKKK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKKKKKKKKKKK..","..KKKKKKKKKKKK..","....KnnKKnnK....","....KKK..KKK...."],
+  heroU_1: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbbbbbbbbbbK..","..KbbbwwwbbbbK..","..KKKKKKKKKKKK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKKKKKKKKKKK..","..KKKKKKKKKKKK..","....KnnK.KKK....","....KKK..KKK...."],
+  heroU_2: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbbbbbbbbbbK..","..KbbbwwwbbbbK..","..KKKKKKKKKKKK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","..KnnnnnnnnnnK..","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKKKKKKKKKKK..","..KKKKKKKKKKKK..","....KKK.KnnK....","....KKK..KKK...."],
+  heroL_0: ["................","...KKKKKKKK.....","..KbbbbbbbbK....",".KwwwwwwwwwbK...",".KwwwwwwwwwbK...","..KKKKKKKKKKK...","..KnnsssssnnK...","..KnsskkssskkK..","..KnsssssssskK..","..KnsssssssnK...","...KKKKKKKK.....","..KKKKKKKKKK....","..KKrrrrrrKK....","..KKKKKKKKKK....","....KnnKKK......","....KKK..K......"],
+  heroL_1: ["................","...KKKKKKKK.....","..KbbbbbbbbK....",".KwwwwwwwwwbK...",".KwwwwwwwwwbK...","..KKKKKKKKKKK...","..KnnsssssnnK...","..KnsskkssskkK..","..KnsssssssskK..","..KnsssssssnK...","...KKKKKKKK.....","..KKKKKKKKKK....","..KKrrrrrrKK....","..KKKKKKKKKK....","....KnnK........","....KKK........."],
+  heroL_2: ["................","...KKKKKKKK.....","..KbbbbbbbbK....",".KwwwwwwwwwbK...",".KwwwwwwwwwbK...","..KKKKKKKKKKK...","..KnnsssssnnK...","..KnsskkssskkK..","..KnsssssssskK..","..KnsssssssnK...","...KKKKKKKK.....","..KKKKKKKKKK....","..KKrrrrrrKK....","..KKKKKKKKKK....","........KnnK....","........KKK....."],
+  heroR_0: ["................",".....KKKKKKKK...","....KbbbbbbbbK..","...KbwwwwwwwwwK.","...KbwwwwwwwwwK.","...KKKKKKKKKKK..","...KnnsssssnnK..","..KksskssskksskK","..KksssssssssnK.","...KnsssssssnK..","....KKKKKKKK....","...KKKKKKKKKK...","...KKrrrrrrKK...","...KKKKKKKKKK...","......KnnKKnnK..","......KKK..KKK.."],
+  heroR_1: ["................",".....KKKKKKKK...","....KbbbbbbbbK..","...KbwwwwwwwwwK.","...KbwwwwwwwwwK.","...KKKKKKKKKKK..","...KnnsssssnnK..","..KksskssskksskK","..KksssssssssnK.","...KnsssssssnK..","....KKKKKKKK....","...KKKKKKKKKK...","...KKrrrrrrKK...","...KKKKKKKKKK...","......KnnK......","......KKK......."],
+  heroR_2: ["................",".....KKKKKKKK...","....KbbbbbbbbK..","...KbwwwwwwwwwK.","...KbwwwwwwwwwK.","...KKKKKKKKKKK..","...KnnsssssnnK..","..KksskssskksskK","..KksssssssssnK.","...KnsssssssnK..","....KKKKKKKK....","...KKKKKKKKKK...","...KKrrrrrrKK...","...KKKKKKKKKK...","..........KnnK..","..........KKK..."],
+  // 抽象的な敵スプライト (各章の影)
+  shadow_a: ["................","....KKKKKKKK....","...KAAAAAAAAK...","..KAaaaaaaaaAK..","..KAawwAAwwaAK..","..KAawkAAwkaAK..","..KAaaaaaaaaAK..","..KAAaaaaaaAAK..","..KAAAaaaaAAAK..","..KAAAAAAAAAAK..","...KAAAAAAAAK...","....KAAAAAAK....",".....KAAAAK.....","......KAAK......","................","................"],
+  shadow_b: ["................","................","....KKKKKKKK....","...KAAAAAAAAK...","..KAaaaaaaaaAK..","..KAawwAAwwaAK..","..KAawkAAwkaAK..","..KAaaaaaaaaAK..","..KAAaaaaaaAAK..","..KAAAaaaaAAAK..","..KAAAAAAAAAAK..","...KAAAAAAAAK...","....KAAAAAAK....",".....KAAAAK.....","......KAAK......","................"],
+  // フロアにある階段
+  stair: ["................","................","KKKKKKKKKKKKKKKK","KAAAAAAAAAAAAAAK","KaaaaaaaaaaaaaaA","KKKKKKKKKKKKKKaA","KAAAAAAAAAAAAKaA","KaaaaaaaaaaaaKaA","KKKKKKKKKKKKaKaA","KAAAAAAAAAAaaKaA","KaaaaaaaaaaKaKaA","KKKKKKKKKKaaKaaA","KAAAAAAAAaaKaKaA","KaaaaaaaaKaaKaaA","KKKKKKKKaaKaKaaA","KAAAAAAaaKaaKaaA"],
+  death_a: ["................","....KKKKKKKK....","...KAAAAAAAAK...","..KAAAAAAAAAAK..","..KAAwwwwwwAAK..","..KAAwkkwwkkAK..","..KAAwkkwwkkAK..","..KAAwwwwwwwAK..","..KAAwwkkkkwAK..","..KAAAwwwwwAAK..",".KKAAAAAAAAAAKK.","KooAAAAAAAAAAooK","KooAAAyyyyyAAooK",".KooAAyyyyAAooK.","..KKooAAAAooKK..","....KKKKKKKK...."],
+  death_b: ["....KKKKKKKK....","...KAAAAAAAAK...","..KAAAAAAAAAAK..","..KAAwwwwwwAAK..","..KAAwkkwwkkAK..","..KAAwkkwwkkAK..","..KAAwwwwwwwAK..","..KAAwwkkkkwAK..","..KAAAwwwwwAAK..",".KKAAAAAAAAAAKK.","KooAAAAAAAAAAooK","KooAAAyyyyyAAooK","KooAAyyyyyyAAooK",".KooAAyyyyAAooK.","..KKooAAAAooKK..","....KKKKKKKK...."],
+};
+
+// 章ごとのバイオーム
+const BIOMES = {
+  dawn:   { f1: '#a8806a', f2: '#806050', f3: '#c89888', fa: '#604838', fb: '#d8b0a0', w1: '#4a2818', w2: '#2a1208', w3: '#1a0808', tint: 0 },
+  fierce: { f1: '#a04848', f2: '#702828', f3: '#c06060', fa: '#501818', fb: '#d07878', w1: '#3a1010', w2: '#200808', w3: '#100404', tint: 0 },
+  iron:   { f1: '#606878', f2: '#404858', f3: '#7080a0', fa: '#202830', fb: '#8090a8', w1: '#181820', w2: '#080810', w3: '#040408', tint: 0 },
+  pale:   { f1: '#c0c0d8', f2: '#a0a0b8', f3: '#e0e0f0', fa: '#808098', fb: '#f0f0ff', w1: '#5a5a70', w2: '#2a2a3a', w3: '#101018', tint: 0 },
+};
+
+// ============ MAP GENERATION ============
+function genMap() {
+  const map = Array.from({length: GRID_H}, () => Array(GRID_W).fill(1));
+  const rooms = [];
+  const numRooms = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < numRooms; i++) {
+    const rw = 4 + Math.floor(Math.random() * 5);
+    const rh = 3 + Math.floor(Math.random() * 3);
+    const rx = 1 + Math.floor(Math.random() * (GRID_W - rw - 2));
+    const ry = 1 + Math.floor(Math.random() * (GRID_H - rh - 2));
+    for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
+    rooms.push({ x: rx + Math.floor(rw/2), y: ry + Math.floor(rh/2) });
+  }
+  for (let i = 0; i < rooms.length - 1; i++) {
+    let { x: x1, y: y1 } = rooms[i];
+    const { x: x2, y: y2 } = rooms[i+1];
+    while (x1 !== x2) { map[y1][x1] = 0; x1 += x1 < x2 ? 1 : -1; }
+    while (y1 !== y2) { map[y1][x1] = 0; y1 += y1 < y2 ? 1 : -1; }
+  }
+  return { map, rooms };
+}
+
+function findEmpty(map, taken, awayFrom, minDist = 0) {
+  for (let tries = 0; tries < 500; tries++) {
+    const x = 1 + Math.floor(Math.random() * (GRID_W - 2));
+    const y = 1 + Math.floor(Math.random() * (GRID_H - 2));
+    if (map[y][x] !== 0) continue;
+    if (taken.some(t => t.x === x && t.y === y)) continue;
+    if (awayFrom && minDist > 0) {
+      const d = Math.abs(x - awayFrom.x) + Math.abs(y - awayFrom.y);
+      if (d < minDist) continue;
+    }
+    return { x, y };
+  }
+  return null;
+}
+
+function loadDay(day) {
+  if (day > 30) return;
+  const chapter = getChapter(day);
+  const prevChapterId = state.day ? getChapter(state.day).id : null;
+  state.day = day;
+  state.biome = chapter.biome;
+  state.eventDone = false;
+
+  // 章が変わったらBGM変更（初回も含む）
+  if (musicEnabled && (!currentMusic || currentMusic.chapter !== chapter.biome)) {
+    playMusic(chapter.biome);
+  }
+
+  // Day 30 (死神) は特殊
+  if (day === 30) {
+    loadDeathFloor();
+    if (musicEnabled) playMusic('death');
+    return;
+  }
+
+  const { map, rooms } = genMap();
+  state.map = map;
+  const startRoom = rooms[0];
+  state.player = { x: startRoom.x, y: startRoom.y, dir: 0, px: startRoom.x * TILE, py: startRoom.y * TILE, walkFrame: 0 };
+  const playerPos = { x: state.player.x, y: state.player.y };
+  const taken = [playerPos];
+
+  // 階段 (last room)
+  const lastRoom = rooms[rooms.length - 1];
+  state.stair = { x: lastRoom.x, y: lastRoom.y };
+  taken.push(state.stair);
+
+  // 敵 (影): Day 5 以降から 控えめに出現
+  state.enemies = [];
+  const enemyCount = day < 5 ? 0 : day < 12 ? 1 : day < 20 ? 1 : day < 26 ? 2 : 1;
+  for (let i = 0; i < enemyCount; i++) {
+    const pos = findEmpty(map, taken, playerPos, 5);
+    if (!pos) break;
+    state.enemies.push(makeShadow(pos, day));
+    taken.push(pos);
+  }
+
+  document.getElementById('floorName').textContent = `― ${chapter.name} ―`;
+  document.getElementById('dayLabel').textContent = `Day ${day}`;
+  updateStats();
+  log(`Day ${day}. ${chapter.name}の階。`, 'epic');
+  if (state.day === 1) log('階段を上れ。終わりは そう遠くない。', 'dim');
+}
+
+function loadDeathFloor() {
+  // 死神フロア: 探索なし、すぐにイベント
+  state.map = Array.from({length: GRID_H}, () => Array(GRID_W).fill(1));
+  for (let y = 5; y < 12; y++) for (let x = 4; x < 20; x++) state.map[y][x] = 0;
+  state.player = { x: 6, y: 10, dir: 3, px: 6 * TILE, py: 10 * TILE, walkFrame: 0 };
+  state.enemies = [];
+  state.stair = null;
+  state.death = { x: 18, y: 8, px: 18 * TILE, py: 8 * TILE };
+  document.getElementById('floorName').textContent = '― 死神の間 ―';
+  document.getElementById('dayLabel').textContent = 'Day 30';
+  updateStats();
+  log('Day 30. 最終フロア。', 'epic');
+  log('奥に 誰かが立っている。', 'dim');
+}
+
+// ============ SHADOW (敵) ============
+const SHADOW_TYPES = {
+  regret:  { name: 'こうかい',     ai: 'slow' },
+  attach:  { name: 'しゅうちゃく', ai: 'chase' },
+  fear:    { name: 'きょうふ',     ai: 'fast' },
+  bore:    { name: 'たいくつ',     ai: 'wander' },
+  lonely:  { name: 'こどく',       ai: 'teleport' },
+};
+
+function makeShadow(pos, day) {
+  // 階層に応じて影が強くなる
+  const lvBoost = Math.floor((day - 5) / 3);
+  const keys = Object.keys(SHADOW_TYPES);
+  const k = keys[Math.floor(Math.random() * keys.length)];
+  const t = SHADOW_TYPES[k];
+  const baseHp = 8 + lvBoost * 4;
+  const baseAtk = 3 + Math.floor(lvBoost * 0.8);
+  return {
+    ...pos, kind: k, name: t.name, ai: t.ai,
+    hp: baseHp, maxHp: baseHp, atk: baseAtk, def: Math.floor(lvBoost / 2),
+    sight: t.ai === 'teleport' ? 99 : t.ai === 'fast' ? 9 : t.ai === 'wander' ? 4 : 6,
+    px: pos.x * TILE, py: pos.y * TILE,
+    teleportCooldown: 0,
+    actions: ['attack', 'attack', 'attack', 'sharp'],
+  };
+}
+
+// ============ RENDERING ============
+function drawSprite(ctx, sprite, px, py, scale) {
+  for (let y = 0; y < sprite.length; y++) {
+    const row = sprite[y];
+    for (let x = 0; x < row.length; x++) {
+      const c = row[x];
+      if (c === '.') continue;
+      const color = PAL[c]; if (!color) continue;
+      ctx.fillStyle = color;
+      ctx.fillRect(px + x * scale, py + y * scale, scale, scale);
+    }
+  }
+}
+
+// スプライトを 20px タイルの中央に置く (スプライトは 16x16)
+function drawSpriteCentered(ctx, sprite, tileX, tileY, scale) {
+  const offsetX = Math.floor((TILE - 16 * scale) / 2);
+  const offsetY = Math.floor((TILE - 16 * scale) / 2);
+  drawSprite(ctx, sprite, tileX + offsetX, tileY + offsetY, scale);
+}
+
+function drawFloorTile(ctx, x, y, biome) {
+  const b = BIOMES[biome] || BIOMES.dawn;
+  const px = x * TILE, py = y * TILE;
+  ctx.fillStyle = b.f1; ctx.fillRect(px, py, TILE, TILE);
+  ctx.fillStyle = b.f3; ctx.fillRect(px, py, TILE, 1); ctx.fillRect(px, py, 1, TILE);
+  ctx.fillStyle = b.fa; ctx.fillRect(px, py + TILE - 1, TILE, 1); ctx.fillRect(px + TILE - 1, py, 1, TILE);
+  const seed = (x * 17 + y * 31) % 13;
+  ctx.fillStyle = b.f2;
+  if (seed === 0) { ctx.fillRect(px + 4, py + 6, 4, 1); ctx.fillRect(px + 6, py + 8, 3, 1); }
+  else if (seed === 3) { ctx.fillRect(px + 10, py + 10, 5, 1); }
+  else if (seed === 6) { ctx.fillRect(px + 4, py + 14, 1, 3); }
+}
+
+function drawWallTile(ctx, x, y, biome) {
+  const b = BIOMES[biome] || BIOMES.dawn;
+  const px = x * TILE, py = y * TILE;
+  ctx.fillStyle = b.w1; ctx.fillRect(px, py, TILE, TILE);
+  ctx.fillStyle = b.w2;
+  ctx.fillRect(px, py + 9, TILE, 1); ctx.fillRect(px, py + TILE - 1, TILE, 1);
+  const row = y % 2;
+  if (row === 0) { ctx.fillRect(px + 9, py, 1, 9); ctx.fillRect(px + 9, py + 10, 1, 9); }
+  else { ctx.fillRect(px + 4, py, 1, 9); ctx.fillRect(px + 14, py + 10, 1, 9); }
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(px, py, TILE, 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(px, py + TILE - 1, TILE, 1);
+}
+
+function drawField() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      if (state.map[y][x] === 1) drawWallTile(ctx, x, y, state.biome);
+      else drawFloorTile(ctx, x, y, state.biome);
+    }
+  }
+  if (state.stair) {
+    drawSpriteCentered(ctx, SPRITES.stair, state.stair.x * TILE, state.stair.y * TILE, SCALE);
+  }
+  const eFrame = Math.floor(state.animFrame / 18) % 2 === 0 ? 'a' : 'b';
+  for (const en of state.enemies) {
+    const sp = SPRITES[`shadow_${eFrame}`];
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.ellipse(en.px + TILE/2, en.py + TILE - 2, 6, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawSpriteCentered(ctx, sp, en.px, en.py, SCALE);
+  }
+  if (state.death) {
+    const sp = SPRITES[`death_${eFrame}`];
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(state.death.px + TILE/2, state.death.py + TILE - 2, 8, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawSpriteCentered(ctx, sp, state.death.px, state.death.py, SCALE);
+  }
+  const walkPattern = [0, 1, 0, 2];
+  const heroFrameIdx = walkPattern[state.player.walkFrame % 4];
+  const dirKey = ['heroD', 'heroL', 'heroR', 'heroU'][state.player.dir];
+  const heroSprite = SPRITES[`${dirKey}_${heroFrameIdx}`];
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(state.player.px + TILE/2, state.player.py + TILE - 2, 6, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (heroSprite) drawSpriteCentered(ctx, heroSprite, state.player.px, state.player.py, SCALE);
+}
+
+function drawBattle() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const b = BIOMES[state.biome] || BIOMES.dawn;
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, b.f2); grad.addColorStop(0.6, b.f1); grad.addColorStop(1, b.fa);
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = b.fa;
+  for (let i = 0; i < 6; i++) ctx.fillRect(0, canvas.height - 80 + i * 14, canvas.width, 2);
+  if (battle && battle.enemy) {
+    const eFrame = Math.floor(state.animFrame / 18) % 2 === 0 ? 'a' : 'b';
+    const sp = SPRITES[`shadow_${eFrame}`];
+    if (sp) {
+      const enemyScale = 6;
+      const ew = sp[0].length * enemyScale;
+      const ex = (canvas.width - ew) / 2;
+      const shakeX = battle.shakeEnemy ? (Math.random() - 0.5) * 12 : 0;
+      const ey = 40;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(canvas.width / 2, ey + sp.length * enemyScale - 4, 50, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const bob = Math.round(Math.sin(state.animFrame / 14) * 4);
+      if (battle.enemyFading !== null && battle.enemyFading !== undefined) ctx.globalAlpha = battle.enemyFading;
+      drawSprite(ctx, sp, ex + shakeX, ey + bob, enemyScale);
+      ctx.globalAlpha = 1;
+    }
+    ctx.font = 'bold 18px "DotGothic16", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText(battle.enemy.name + ' が あらわれた', canvas.width / 2, 26);
+  }
+}
+
+function draw() {
+  if (state && state.inBattle) drawBattle();
+  else if (state) drawField();
+}
+
+function easeInOutQuad(t) { return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2) / 2; }
+
+function animateMove(actor, fromX, fromY, toX, toY, duration, onComplete) {
+  const startTime = performance.now();
+  const fromPx = fromX * TILE, fromPy = fromY * TILE;
+  const toPx = toX * TILE, toPy = toY * TILE;
+  let walkAnimStart = actor === state.player ? state.player.walkFrame : 0;
+  function step() {
+    if (!state) return;
+    const elapsed = performance.now() - startTime;
+    let t = Math.min(1, elapsed / duration);
+    const eased = easeInOutQuad(t);
+    actor.px = fromPx + (toPx - fromPx) * eased;
+    actor.py = fromPy + (toPy - fromPy) * eased;
+    if (actor === state.player) actor.walkFrame = walkAnimStart + (t < 0.5 ? 1 : 2);
+    if (t < 1) requestAnimationFrame(step);
+    else {
+      actor.px = toPx; actor.py = toPy;
+      if (actor === state.player) actor.walkFrame = walkAnimStart + 2;
+      if (onComplete) onComplete();
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ============ LOG ============
+let logQueue = [];
+let logTyping = false;
+function log(msg, type = '') { logQueue.push({ msg, type }); if (!logTyping) processLog(); }
+function processLog() {
+  if (logQueue.length === 0) { logTyping = false; return; }
+  logTyping = true;
+  const { msg, type } = logQueue.shift();
+  const box = document.getElementById('logBox');
+  while (box.children.length >= 3) box.removeChild(box.firstChild);
+  const div = document.createElement('div');
+  div.className = 'log-entry' + (type ? ' ' + type : '');
+  box.appendChild(div);
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= msg.length) { clearInterval(interval); setTimeout(processLog, 200); return; }
+    const ch = msg[i++];
+    if (ch === '\n') div.appendChild(document.createElement('br'));
+    else div.appendChild(document.createTextNode(ch));
+  }, 16);
+}
+
+// ============ STATS UI ============
+function updateStats() {
+  if (!state) return;
+  const life = Math.max(0, state.life);
+  const lifeEl = document.getElementById('lifeDisplay');
+  lifeEl.textContent = `${life}日`;
+  lifeEl.classList.toggle('warn', life <= 5);
+  document.getElementById('vitDisplay').textContent = `${Math.max(0, state.vit)}`;
+  document.getElementById('vitBar').style.width = `${Math.max(0, state.vit)}%`;
+  document.getElementById('coinDisplay').textContent = `${state.coin}`;
+  document.getElementById('floorDisplay').textContent = `${state.day} / 30`;
+}
+
+function flashDamage() {
+  const f = document.getElementById('dmgFlash');
+  f.classList.add('active');
+  setTimeout(() => f.classList.remove('active'), 200);
+}
+
+// ============ ENEMY AI ============
+function lineOfSight(x1, y1, x2, y2) {
+  const dx = Math.abs(x2-x1), dy = Math.abs(y2-y1);
+  const sx = x1<x2?1:-1, sy = y1<y2?1:-1;
+  let err = dx - dy; let x = x1, y = y1;
+  while (true) {
+    if (x === x2 && y === y2) return true;
+    const e2 = 2 * err;
+    if (e2 > -dy) { err -= dy; x += sx; }
+    if (e2 < dx) { err += dx; y += sy; }
+    if (state.map[y] && state.map[y][x] === 1 && !(x === x2 && y === y2)) return false;
+  }
+}
+
+function bfsNextStep(fromX, fromY, toX, toY, maxDist) {
+  const visited = Array.from({length: GRID_H}, () => Array(GRID_W).fill(false));
+  const parent = {};
+  const queue = [{x: fromX, y: fromY, dist: 0}];
+  visited[fromY][fromX] = true;
+  const key = (x, y) => `${x},${y}`;
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur.x === toX && cur.y === toY) {
+      let prev = parent[key(toX, toY)];
+      if (!prev) return null;
+      while (prev && parent[key(prev.x, prev.y)]) prev = parent[key(prev.x, prev.y)];
+      return prev;
+    }
+    if (cur.dist >= maxDist) continue;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+      if (visited[ny][nx]) continue;
+      if (state.map[ny][nx] === 1) continue;
+      if (!(nx === toX && ny === toY)) {
+        if (state.enemies.some(e => e.x === nx && e.y === ny)) continue;
+      }
+      visited[ny][nx] = true;
+      parent[key(nx, ny)] = { x: cur.x, y: cur.y };
+      queue.push({ x: nx, y: ny, dist: cur.dist + 1 });
+    }
+  }
+  return null;
+}
+
+function moveEnemy(en) {
+  const px = state.player.x, py = state.player.y;
+  const dist = Math.abs(en.x - px) + Math.abs(en.y - py);
+  const oldX = en.x, oldY = en.y;
+  if (en.ai === 'teleport') {
+    en.teleportCooldown = (en.teleportCooldown || 0) + 1;
+    if (en.teleportCooldown >= 3) {
+      en.teleportCooldown = 0;
+      for (let tries = 0; tries < 30; tries++) {
+        const dx = Math.floor(Math.random()*5) - 2; const dy = Math.floor(Math.random()*5) - 2;
+        const nx = px + dx, ny = py + dy;
+        if (nx <= 0 || nx >= GRID_W-1 || ny <= 0 || ny >= GRID_H-1) continue;
+        if (state.map[ny][nx] !== 0) continue;
+        if (nx === px && ny === py) continue;
+        if (state.enemies.some(e => e !== en && e.x === nx && e.y === ny)) continue;
+        en.x = nx; en.y = ny; en.px = nx*TILE; en.py = ny*TILE;
+        return;
+      }
+    }
+    return;
+  }
+  if (en.ai === 'wander') {
+    if (Math.random() < 0.6) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const d = dirs[Math.floor(Math.random()*4)];
+      tryStepEnemyDir(en, d[0], d[1]);
+    }
+    if (en.x !== oldX || en.y !== oldY) animateMove(en, oldX, oldY, en.x, en.y, MOVE_DURATION);
+    return;
+  }
+  if (en.ai === 'slow' && Math.random() < 0.4) return;
+  if (dist <= en.sight && lineOfSight(en.x, en.y, px, py)) {
+    const next = bfsNextStep(en.x, en.y, px, py, en.sight + 2);
+    if (next) { en.x = next.x; en.y = next.y; }
+    if (en.ai === 'fast' && (en.x !== px || en.y !== py)) {
+      const next2 = bfsNextStep(en.x, en.y, px, py, en.sight + 2);
+      if (next2 && !(next2.x === px && next2.y === py && state.enemies.some(e => e !== en && e.x === next2.x && e.y === next2.y))) {
+        en.x = next2.x; en.y = next2.y;
+      }
+    }
+  } else {
+    if (Math.random() < 0.3) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const d = dirs[Math.floor(Math.random()*4)];
+      tryStepEnemyDir(en, d[0], d[1]);
+    }
+  }
+  if (en.x !== oldX || en.y !== oldY) animateMove(en, oldX, oldY, en.x, en.y, MOVE_DURATION);
+}
+
+function tryStepEnemyDir(en, dx, dy) {
+  const nx = en.x + dx, ny = en.y + dy;
+  if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) return false;
+  if (state.map[ny][nx] === 1) return false;
+  if (state.enemies.some(e => e !== en && e.x === nx && e.y === ny)) return false;
+  en.x = nx; en.y = ny; return true;
+}
+
+function enemyTurn() {
+  for (const en of [...state.enemies]) {
+    if (state.gameOver || state.inBattle) return;
+    moveEnemy(en);
+    if (en.x === state.player.x && en.y === state.player.y) {
+      startBattle(en);
+      return;
+    }
+  }
+  updateStats();
+}
+
+// ============ BATTLE ============
+function startBattle(enemy) {
+  state.inBattle = true;
+  battle = {
+    enemy: enemy, enemyRef: enemy,
+    showingMsg: false, waitingForInput: false,
+    shakeEnemy: false, enemyFading: null,
+    stunNextTurn: false, defending: false,
+    prevChapter: state.biome, // 戦闘終了時に戻すため
+  };
+  if (musicEnabled) playMusic('battle');
+  document.getElementById('stage').classList.add('in-battle');
+  document.querySelectorAll('.battle-ui').forEach(el => el.classList.add('active'));
+  document.getElementById('battleStats').style.display = 'grid';
+  updateBattleStats();
+  showBattleMsg(`${enemy.name} が あらわれた`, () => promptCommand());
+}
+
+function updateBattleStats() {
+  document.getElementById('bLifeDisplay').textContent = `${Math.max(0, state.life)}日 / 体力${Math.max(0, state.vit)}`;
+  document.getElementById('bLifeDisplay').classList.toggle('warn', state.life <= 5);
+  document.getElementById('bEnemyName').textContent = battle.enemy.name;
+  document.getElementById('bEnemyHp').textContent = `HP ${Math.max(0, battle.enemy.hp)} / ${battle.enemy.maxHp}`;
+}
+
+let typingAnimId = null;
+function showBattleMsg(msg, onComplete) {
+  const msgEl = document.getElementById('battleMsgText');
+  document.getElementById('battleCmd').style.display = 'none';
+  document.getElementById('battleMsg').style.display = 'block';
+  msgEl.innerHTML = '';
+  let i = 0;
+  if (typingAnimId) clearInterval(typingAnimId);
+  battle.showingMsg = true;
+  typingAnimId = setInterval(() => {
+    if (i >= msg.length) {
+      clearInterval(typingAnimId); typingAnimId = null;
+      battle.showingMsg = false;
+      setTimeout(() => { if (onComplete) onComplete(); }, 500);
+      return;
+    }
+    const ch = msg[i++];
+    if (ch === '\n') msgEl.appendChild(document.createElement('br'));
+    else msgEl.appendChild(document.createTextNode(ch));
+  }, 20);
+}
+
+function promptCommand() {
+  document.getElementById('battleMsg').style.display = 'none';
+  document.getElementById('battleCmd').style.display = 'grid';
+  battle.waitingForInput = true;
+  cmdMenuIdx = 0;
+  highlightCmd(0);
+  document.querySelector('#battleCmd .cmd-btn[data-cmd="spell"]').disabled = state.life < 3;
+}
+
+function highlightCmd(idx) {
+  document.querySelectorAll('#battleCmd .cmd-btn').forEach((b, i) => {
+    b.classList.toggle('selected', i === idx);
+  });
+}
+
+function selectCmd(cmd) {
+  if (!battle || !battle.waitingForInput) return;
+  battle.waitingForInput = false;
+  document.getElementById('battleCmd').style.display = 'none';
+  if (cmd === 'attack') playerAttack();
+  else if (cmd === 'spell') playerSpell();
+  else if (cmd === 'defend') playerDefend();
+  else if (cmd === 'run') playerRun();
+}
+
+function playerAttack() {
+  const baseAtk = Math.floor(state.vit * 0.06) + 5;
+  const dmg = Math.max(1, baseAtk + Math.floor(Math.random()*3) - 1 - battle.enemy.def);
+  battle.enemy.hp -= dmg;
+  state.vit = Math.max(0, state.vit - 1);
+  battle.shakeEnemy = true;
+  setTimeout(() => battle.shakeEnemy = false, 300);
+  flashDamage();
+  if (musicEnabled) sfxHit();
+  showBattleMsg(`あなたの こうげき!\n${battle.enemy.name}に ${dmg}の ダメージ! (体力-1)`, () => {
+    updateBattleStats(); checkBattleEnd();
+  });
+}
+
+function playerSpell() {
+  state.life -= 2;
+  updateBattleStats();
+  const baseAtk = Math.floor(state.vit * 0.06) + 3;
+  const dmg = baseAtk * 2 + Math.floor(Math.random()*4);
+  battle.enemy.hp -= dmg;
+  battle.shakeEnemy = true;
+  setTimeout(() => battle.shakeEnemy = false, 400);
+  flashDamage();
+  showBattleMsg(`じゅもんを となえた!\n${battle.enemy.name}に ${dmg}の ダメージ!\n(よめい -2)`, () => {
+    updateBattleStats();
+    if (state.life <= 0) { battleGameOver(); return; }
+    checkBattleEnd();
+  });
+}
+
+function playerDefend() {
+  battle.defending = true;
+  showBattleMsg('あなたは みを まもっている。', () => enemyAct());
+}
+
+function playerRun() {
+  // 体力が低いほど逃げにくい
+  const successRate = 0.3 + (state.vit / 200);
+  if (Math.random() < successRate) {
+    showBattleMsg('あなたは うまく にげだした!', () => endBattle('run'));
+  } else {
+    state.vit = Math.max(0, state.vit - 5);
+    showBattleMsg('しかし まわりこまれた!\n(体力 -5)', () => enemyAct());
+  }
+}
+
+function enemyAct() {
+  if (!battle || battle.enemy.hp <= 0) { checkBattleEnd(); return; }
+  const dmg = battle.enemy.atk + Math.floor(Math.random() * 3);
+  const actualDmg = battle.defending ? Math.max(1, Math.floor(dmg / 2)) : dmg;
+  battle.defending = false;
+  state.vit = Math.max(0, state.vit - actualDmg);
+  flashDamage();
+  if (musicEnabled) sfxHurt();
+  updateBattleStats();
+  if (state.vit <= 0) {
+    state.life -= 5; // 体力0で倒れたら余命も削れる
+    updateStats();
+    if (state.life <= 0) {
+      showBattleMsg(`あなたは ${actualDmg}の ダメージ!\n体力が 尽きた…`, () => battleGameOver());
+      return;
+    }
+    showBattleMsg(`あなたは ${actualDmg}の ダメージ!\n体力が 尽きた。よめい -5日`, () => {
+      state.vit = 30; // 最低限の体力で復帰
+      updateBattleStats();
+      promptCommand();
+    });
+    return;
+  }
+  showBattleMsg(`${battle.enemy.name}の こうげき!\nあなたは ${actualDmg}の ダメージ!`, () => promptCommand());
+}
+
+function checkBattleEnd() {
+  if (battle.enemy.hp <= 0) {
+    battle.enemyFading = 1;
+    const fadeInterval = setInterval(() => {
+      battle.enemyFading -= 0.1;
+      if (battle.enemyFading <= 0) {
+        clearInterval(fadeInterval);
+        battle.enemyFading = null;
+        endBattle('win');
+      }
+    }, 50);
+  } else {
+    enemyAct();
+  }
+}
+
+function endBattle(result) {
+  if (result === 'win') {
+    state.killCount++;
+    const expReward = 2 + Math.floor(state.day / 5);
+    state.coin += expReward;
+    // 影を鎮めると 体力が少し戻り、まれに余命も戻る
+    state.vit = Math.min(100, state.vit + 5);
+    const lifeBonus = Math.random() < 0.4 ? 1 : 0;
+    if (lifeBonus > 0) state.life += lifeBonus;
+    if (musicEnabled) sfxVictory();
+    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward} ／ 体力 +5${lifeBonus > 0 ? '\nよめい +'+lifeBonus+'日' : ''}`, () => {
+      finishBattle();
+    });
+  } else {
+    finishBattle();
+  }
+}
+
+function finishBattle() {
+  const prevChapter = battle && battle.prevChapter;
+  state.enemies = state.enemies.filter(e => e !== battle.enemyRef);
+  state.inBattle = false;
+  battle = null;
+  document.getElementById('stage').classList.remove('in-battle');
+  document.querySelectorAll('.battle-ui').forEach(el => el.classList.remove('active'));
+  document.getElementById('battleStats').style.display = 'none';
+  document.getElementById('battleMsg').style.display = 'none';
+  document.getElementById('battleCmd').style.display = 'none';
+  // 章BGMに戻す
+  if (musicEnabled && prevChapter) playMusic(prevChapter);
+  updateStats();
+}
+
+function battleGameOver() {
+  state.inBattle = false;
+  document.getElementById('stage').classList.remove('in-battle');
+  document.querySelectorAll('.battle-ui').forEach(el => el.classList.remove('active'));
+  document.getElementById('battleStats').style.display = 'none';
+  document.getElementById('battleMsg').style.display = 'none';
+  document.getElementById('battleCmd').style.display = 'none';
+  gameOver();
+}
+
+// ============ MOVE & DAY ============
+function tryMove(dx, dy) {
+  if (!state || state.gameOver || state.inBattle || inputLocked || logTyping) return;
+  if (dy > 0) state.player.dir = 0;
+  else if (dx < 0) state.player.dir = 1;
+  else if (dx > 0) state.player.dir = 2;
+  else if (dy < 0) state.player.dir = 3;
+  const nx = state.player.x + dx;
+  const ny = state.player.y + dy;
+  if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) { draw(); return; }
+  if (state.map[ny][nx] === 1) { draw(); return; }
+  const enemyHere = state.enemies.find(e => e.x === nx && e.y === ny);
+  if (enemyHere) { startBattle(enemyHere); return; }
+  const oldX = state.player.x, oldY = state.player.y;
+  state.player.x = nx; state.player.y = ny;
+  state.totalSteps++;
+  inputLocked = true;
+  animateMove(state.player, oldX, oldY, nx, ny, MOVE_DURATION, () => {
+    // 階段到達 → イベント発火
+    if (state.stair && state.stair.x === nx && state.stair.y === ny && !state.eventDone) {
+      triggerEvent();
+      return;
+    }
+    // Day 30: 死神
+    if (state.death && Math.abs(state.death.x - nx) <= 1 && Math.abs(state.death.y - ny) <= 1) {
+      triggerDeathEvent();
+      return;
+    }
+    if (state.life <= 0) { gameOver(); return; }
+    enemyTurn();
+    if (!state.inBattle) inputLocked = false;
+    updateStats();
+  });
+}
+
+// ============ EVENT SYSTEM ============
+function triggerEvent() {
+  const ev = EVENTS[state.day];
+  if (!ev) {
+    state.life -= 1;
+    nextDay();
+    return;
+  }
+  state.eventDone = true;
+  if (musicEnabled) sfxStair();
+  showEvent(ev);
+}
+
+function showEvent(ev) {
+  const overlay = document.getElementById('eventOverlay');
+  document.getElementById('eventTag').textContent = `― Day ${state.day} ―`;
+  document.getElementById('eventTitle').textContent = ev.title;
+  document.getElementById('eventDesc').innerHTML = ev.desc.replace(/\n/g, '<br>');
+  const choicesEl = document.getElementById('eventChoices');
+  choicesEl.innerHTML = '';
+  ev.choices.forEach((ch, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-choice';
+    let html = `<span>${idx + 1}. ${ch.t}</span>`;
+    const costs = [];
+    if (ch.e.life !== undefined && ch.e.life !== 0) costs.push(`<span class="${ch.e.life < 0 ? 'danger-cost' : 'good-cost'}">よめい ${ch.e.life > 0 ? '+' : ''}${ch.e.life}日</span>`);
+    if (ch.e.vit !== undefined && ch.e.vit !== 0) costs.push(`<span class="${ch.e.vit < 0 ? 'danger-cost' : 'good-cost'}">体力 ${ch.e.vit > 0 ? '+' : ''}${ch.e.vit}</span>`);
+    if (costs.length) html += `<span class="choice-cost">${costs.join(' / ')}</span>`;
+    btn.innerHTML = html;
+    // requires チェック
+    const req = ch.e.requires;
+    let disabled = false;
+    if (req) {
+      if (req.vit !== undefined && state.vit < req.vit) disabled = true;
+      if (req.coin !== undefined && state.coin < req.coin) disabled = true;
+    }
+    if (disabled) {
+      btn.disabled = true;
+      btn.innerHTML += ` <span style="color:#404050;font-size:9px;">[条件未達]</span>`;
+    } else {
+      btn.onclick = () => applyChoice(ev, ch, idx);
+    }
+    choicesEl.appendChild(btn);
+  });
+  overlay.classList.remove('hidden');
+}
+
+function applyChoice(ev, ch, idx) {
+  if (musicEnabled) sfxBlip(600 + idx * 80, 0.05);
+  const e = ch.e;
+  if (e.life !== undefined) state.life += e.life;
+  if (e.vit !== undefined) state.vit = Math.max(0, Math.min(100, state.vit + e.vit));
+  if (e.coin !== undefined) state.coin += e.coin;
+  if (e.fight) state.fight += e.fight;
+  if (e.accept) state.accept += e.accept;
+  if (e.escape) state.escape += e.escape;
+  if (e.observe) state.observe += e.observe;
+  if (e.item) state.items[e.item] = true;
+  if (e.unlock) state.unlocks[e.unlock] = true;
+  if (e.special) state.specials[e.special] = true;
+
+  // 理不尽処理
+  if (ev.unfair) {
+    state.unfairCount++;
+    const f = ev.unfair.forcedDamage;
+    if (f.life) state.life += f.life;
+    if (f.vit) state.vit = Math.max(0, state.vit + f.vit);
+    if (f.coin) state.coin += f.coin;
+    if (f.fight) state.fight += f.fight;
+    if (f.accept) state.accept += f.accept;
+    if (f.escape) state.escape += f.escape;
+    if (f.observe) state.observe += f.observe;
+    closeEvent();
+    showUnfairResult(ev.unfair);
+    return;
+  }
+
+  closeEvent();
+  if (e.narration) {
+    setTimeout(() => log(e.narration, 'epic'), 100);
+  }
+  setTimeout(() => {
+    if (state.life <= 0) { gameOver(); return; }
+    nextDay();
+  }, e.narration ? 2200 : 400);
+}
+
+function showUnfairResult(unfair) {
+  if (musicEnabled) sfxUnfair();
+  setTimeout(() => {
+    log(unfair.afterText, 'warn');
+    setTimeout(() => {
+      log(unfair.forcedMsg, 'warn');
+      setTimeout(() => {
+        if (state.life <= 0) { gameOver(); return; }
+        nextDay();
+      }, 1500);
+    }, 3000);
+  }, 300);
+}
+
+function closeEvent() {
+  document.getElementById('eventOverlay').classList.add('hidden');
+}
+
+function nextDay() {
+  inputLocked = true;
+  setTimeout(() => {
+    if (state.day >= 30) {
+      // 死神戦
+      loadDay(30);
+      inputLocked = false;
+      return;
+    }
+    loadDay(state.day + 1);
+    inputLocked = false;
+  }, 500);
+}
+
+// ============ DEATH (Day 30) ============
+function triggerDeathEvent() {
+  state.eventDone = true;
+  document.getElementById('eventOverlay').classList.remove('hidden');
+  document.getElementById('eventTag').textContent = '― Day 30 ―';
+  document.getElementById('eventTitle').textContent = '死神';
+  document.getElementById('eventDesc').innerHTML = '誰かが 立っている。<br>顔は 見えない。<br>だが あなたは 知っている。<br>これが 誰なのか。<br><br>「お前は よく登ってきた」<br>「もう 終わりにしよう」<br><br>死神は ゆっくりと 手を 差し出す。';
+  const choicesEl = document.getElementById('eventChoices');
+  choicesEl.innerHTML = '';
+  const choices = [
+    { t: 'A. 手を取る', e: 'accept' },
+    { t: 'B. 跪く', e: 'observe' },
+    { t: 'C. 振り返って走り出す', e: 'escape' },
+    { t: 'D. 拒絶する。「まだだ」', e: 'fight' },
+  ];
+  choices.forEach((c) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-choice';
+    btn.innerHTML = `<span>${c.t}</span>`;
+    btn.onclick = () => triggerEnding(c.e);
+    choicesEl.appendChild(btn);
+  });
+}
+
+function canStorytellerEnd() {
+  return state.items.last_words && state.items.memory_fragment &&
+         state.items.broken_promise && state.coin >= 100;
+}
+
+function triggerEnding(choiceType) {
+  closeEvent();
+  if (choiceType === 'fight') {
+    // 死神戦
+    if (canStorytellerEnd()) {
+      // 真エンディング
+      showEnding('storyteller');
+    } else {
+      // 戦って敗北
+      showEnding('defiant');
+    }
+  } else if (choiceType === 'accept') {
+    showEnding('embraced');
+  } else if (choiceType === 'escape') {
+    showEnding('wanderer');
+  } else if (choiceType === 'observe') {
+    showEnding('witness');
+  }
+}
+
+function showEnding(kind) {
+  if (musicEnabled) { stopMusic(); if (kind === 'storyteller') { sfxLevelUp(); } else { sfxGameOver(); } }
+  const endings = {
+    defiant: {
+      tag: 'ENDING 1', title: '抗いし者',
+      en: kind === 'defiant' && state.unfairCount >= 3 ? 'The Unbroken' : 'The Defiant',
+      body: '武器を構え、闘志のすべてで斬りかかる。<br>剣戟、嵐、紅蓮の炎。<br>「終わり」は 何度も復活する。<br>あなたは 余命が尽きる瞬間まで 斬り続けた。<br><br>「俺は 最期まで 抗うことを選んだ」',
+    },
+    embraced: {
+      tag: 'ENDING 2', title: '受け入れし者', en: 'The Embraced',
+      body: '椅子が ひとつ。あなたは 座り、<br>「終わり」と 向かい合って 静かに 語り合う。<br>夕暮れ、風、桜が 散る。<br>これまで 出会ったすべての影たちが 見送りに来た。<br><br>「ありがとう。ぜんぶ、私だった」',
+    },
+    wanderer: {
+      tag: 'ENDING 3', title: '駆け抜けし者', en: 'The Wanderer',
+      body: '扉が 並んでいる。あなたは 振り返らず、<br>最後の扉に向かって 走り抜ける。<br>疾走。光。駆け抜ける風景の残像。<br><br>「立ち止まらなかった。<br>それだけで 十分だ」',
+    },
+    witness: {
+      tag: 'ENDING 4', title: '見届けし者',
+      en: state.unfairCount >= 3 ? 'The Witness Through' : 'The Witness',
+      body: '鏡しかない。あなたは 鏡の前に立ち、<br>ただ 自分を見つめ続ける。<br>静寂、無音、鏡の中の自分が ゆっくり微笑む。<br>鏡の外で 余命が ゼロになる瞬間、<br>鏡が 砕け、あなたも 消える。<br><br>「……ああ、そういうことか」',
+    },
+    storyteller: {
+      tag: 'TRUE ENDING', title: '語り継ぐ者', en: 'The Storyteller',
+      body: '死神に対し、あなたは 出会ったすべての人々を 語り始める。<br>マコトの 最期の言葉を。<br>果たせなかった 約束を。<br>記憶のかけらを。<br><br>語り終えた時 死神は 静かに 頷き、消えた。<br>あなたも 消える。<br>だが あなたの語った物語は 塔の壁に 刻まれた。<br><br>「人は、二度死ぬ。だが、語られる限り、生き続ける」' + (state.unfairCount >= 3 ? '<br>「――たとえ、世界がそれを 許さなくとも」' : ''),
+    },
+  };
+  const e = endings[kind];
+  const stat = `たどりついたDay ${state.day} ／ 理不尽 ${state.unfairCount}回通過<br>` +
+    `<span class="gold-stat">闘志${state.fight} ／ 受容${state.accept} ／ 解放${state.escape} ／ 覚醒${state.observe}</span><br>` +
+    `しずめた影 ${state.killCount} ／ 記憶 ${state.coin}`;
+  document.getElementById('endTag').textContent = e.tag;
+  document.getElementById('endTitle').textContent = e.title;
+  document.getElementById('endEn').textContent = e.en;
+  document.getElementById('endBody').innerHTML = e.body;
+  document.getElementById('endStat').innerHTML = stat;
+  document.getElementById('endModal').classList.remove('hidden');
+  state.gameOver = true;
+}
+
+function gameOver() {
+  state.gameOver = true;
+  state.life = Math.max(0, state.life);
+  draw(); updateStats();
+  if (musicEnabled) { stopMusic(); sfxGameOver(); }
+  setTimeout(() => {
+    document.getElementById('endTag').textContent = 'THE UNFINISHED';
+    document.getElementById('endTitle').textContent = '途上で逝きし者';
+    document.getElementById('endEn').textContent = 'The Unfinished';
+    document.getElementById('endBody').innerHTML = '階段の途中で あなたは 立ち止まった。<br>もう 登れない。<br><br>上を見上げると、まだ 続いている。<br>下を見下ろすと、登ってきた階段が 見える。<br><br>「ここまでだったか」<br><br>あなたは 座り込む。<br>余命が、静かに ゼロになる。<br><br><span style="color:#909090;">あなたの物語は まだ終わっていなかった。<br>だが、終わってしまった。<br>――それも、ひとつの真実だ。</span>';
+    document.getElementById('endStat').innerHTML = `たどりついたDay ${state.day} ／ 理不尽 ${state.unfairCount}回通過<br>` +
+      `<span class="gold-stat">闘志${state.fight} ／ 受容${state.accept} ／ 解放${state.escape} ／ 覚醒${state.observe}</span><br>` +
+      `しずめた影 ${state.killCount} ／ 記憶 ${state.coin}`;
+    document.getElementById('endModal').classList.remove('hidden');
+  }, 700);
+}
+
+function openMenu() {
+  // 簡易メニュー（今回は記憶辿りは未実装、状態表示のみ）
+  const items = [];
+  if (state.items.first_wound) items.push('最初の傷');
+  if (state.items.liquor_left) items.push('飲み残しの酒');
+  if (state.items.broken_promise) items.push('果たせなかった約束');
+  if (state.items.last_words) items.push('最期の言葉');
+  if (state.items.memory_fragment) items.push('記憶のかけら');
+  const itemsStr = items.length ? items.join('、') : 'なし';
+  log(`所持品: ${itemsStr}`, 'dim');
+  log(`記憶 ${state.coin} ／ 体力 ${state.vit} ／ 余命 ${state.life}日`, 'dim');
+}
+
+function resetGame() {
+  stopMusic();
+  document.getElementById('endModal').classList.add('hidden');
+  document.getElementById('eventOverlay').classList.add('hidden');
+  document.getElementById('logBox').innerHTML = '';
+  logQueue = []; logTyping = false; inputLocked = false; battle = null;
+  document.getElementById('stage').classList.remove('in-battle');
+  document.querySelectorAll('.battle-ui').forEach(el => el.classList.remove('active'));
+  document.getElementById('battleStats').style.display = 'none';
+  document.getElementById('battleMsg').style.display = 'none';
+  document.getElementById('battleCmd').style.display = 'none';
+  state = newState();
+  state.day = 0;
+  loadDay(1);
+}
+
+function startGame() {
+  initAudio();
+  // ユーザー操作後に AudioContext を resume（自動再生制限対策）
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  document.getElementById('titleScreen').classList.add('hidden');
+  state = newState();
+  state.day = 0; // loadDay で 1 に上書きされるが、prevChapter検出用に
+  loadDay(1);
+  animLoop();
+}
+
+function animLoop() {
+  if (!state) return;
+  state.animFrame++;
+  draw();
+  requestAnimationFrame(animLoop);
+}
+
+// ============ KEYBOARD ============
+document.addEventListener('keydown', (e) => {
+  if (!state || state.gameOver) return;
+  const k = e.key.toLowerCase();
+  // イベント画面で数字キー
+  if (!document.getElementById('eventOverlay').classList.contains('hidden')) {
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 4) {
+      const btns = document.querySelectorAll('#eventChoices .btn-choice');
+      if (btns[num - 1] && !btns[num - 1].disabled) btns[num - 1].click();
+    }
+    return;
+  }
+  if (state.inBattle) {
+    if (!battle || !battle.waitingForInput) return;
+    let handled = true;
+    if (k === 'arrowup' || k === 'w') { cmdMenuIdx = (cmdMenuIdx + 2) % 4; highlightCmd(cmdMenuIdx); }
+    else if (k === 'arrowdown' || k === 's') { cmdMenuIdx = (cmdMenuIdx + 2) % 4; highlightCmd(cmdMenuIdx); }
+    else if (k === 'arrowleft' || k === 'a') { cmdMenuIdx = cmdMenuIdx % 2 === 0 ? cmdMenuIdx + 1 : cmdMenuIdx - 1; highlightCmd(cmdMenuIdx); }
+    else if (k === 'arrowright' || k === 'd') { cmdMenuIdx = cmdMenuIdx % 2 === 0 ? cmdMenuIdx + 1 : cmdMenuIdx - 1; highlightCmd(cmdMenuIdx); }
+    else if (k === ' ' || k === 'enter' || k === 'z') {
+      const cmd = CMD_ORDER[cmdMenuIdx];
+      const btn = document.querySelector(`#battleCmd .cmd-btn[data-cmd="${cmd}"]`);
+      if (btn && !btn.disabled) selectCmd(cmd);
+    } else handled = false;
+    if (handled) e.preventDefault();
+    return;
+  }
+  let handled = true;
+  if (k === 'arrowup' || k === 'w') tryMove(0, -1);
+  else if (k === 'arrowdown' || k === 's') tryMove(0, 1);
+  else if (k === 'arrowleft' || k === 'a') tryMove(-1, 0);
+  else if (k === 'arrowright' || k === 'd') tryMove(1, 0);
+  else handled = false;
+  if (handled) e.preventDefault();
+});
+
+let touchStart = null;
+document.getElementById('canvas').addEventListener('touchstart', (e) => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+});
+document.getElementById('canvas').addEventListener('touchend', (e) => {
+  if (!touchStart || (state && state.inBattle)) { touchStart = null; return; }
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (Math.abs(dx) > 20) tryMove(dx > 0 ? 1 : -1, 0);
+  } else {
+    if (Math.abs(dy) > 20) tryMove(0, dy > 0 ? 1 : -1);
+  }
+  touchStart = null;
+});
+</script>
+
+</body>
+</html>
