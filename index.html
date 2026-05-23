@@ -11,9 +11,9 @@
 <style>
   :root { --bg: #050810; --text: #fff; --dim: #8a8a8a; --gold: #f4d160; --danger: #ff5050; --good: #6acf6a; --coin: #d8b850; --vital: #ff8080; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: #030508; color: var(--text); font-family: 'DotGothic16', monospace; min-height: 100vh; user-select: none; -webkit-font-smoothing: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: contain; }
-  html { overflow-y: auto; }
-  body { display: flex; align-items: flex-start; justify-content: center; padding: 8px 8px 20px; min-height: 100vh; }
+  html, body { background: #030508; color: var(--text); font-family: 'DotGothic16', monospace; min-height: 100vh; user-select: none; -webkit-font-smoothing: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; touch-action: manipulation; }
+  html { overflow: hidden; height: 100%; position: fixed; width: 100%; }
+  body { display: flex; align-items: flex-start; justify-content: center; padding: 8px 8px 12px; height: 100vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .stage { width: 100%; max-width: 780px; display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; }
 
   /* === タイトル画面 === */
@@ -168,7 +168,10 @@
     <p>● ある瞬間、何を選んでも 潰される。</p>
     <p>● 死神は、語る者にしか倒せない。</p>
   </div>
-  <button class="btn-start" onclick="startGame()">塔に 入る</button>
+  <div style="display:flex;flex-direction:column;gap:10px;align-items:center;">
+    <button class="btn-start" onclick="startGame()">塔に 入る</button>
+    <button class="btn-start" style="font-size:13px;padding:10px 24px;letter-spacing:0.15em;background:linear-gradient(180deg, #1a1818 0%, #080808 100%);" onclick="showRecords()">これまでの 結末</button>
+  </div>
   <div class="controls-hint">↑↓←→ / WASD / スワイプ で移動<br>スペース / Enter で 決定</div>
 </div>
 
@@ -206,11 +209,11 @@
   </div>
 
   <div class="dpad" id="dpad">
-    <button class="up" ontouchstart="event.preventDefault();tryMove(0,-1)" onmousedown="if(!('ontouchstart' in window))tryMove(0,-1)">▲</button>
-    <button class="left" ontouchstart="event.preventDefault();tryMove(-1,0)" onmousedown="if(!('ontouchstart' in window))tryMove(-1,0)">◀</button>
-    <button class="center" ontouchstart="event.preventDefault();openMenu()" onmousedown="if(!('ontouchstart' in window))openMenu()">記憶</button>
-    <button class="right" ontouchstart="event.preventDefault();tryMove(1,0)" onmousedown="if(!('ontouchstart' in window))tryMove(1,0)">▶</button>
-    <button class="down" ontouchstart="event.preventDefault();tryMove(0,1)" onmousedown="if(!('ontouchstart' in window))tryMove(0,1)">▼</button>
+    <button class="up" data-dir="up">▲</button>
+    <button class="left" data-dir="left">◀</button>
+    <button class="center" data-dir="center">記憶</button>
+    <button class="right" data-dir="right">▶</button>
+    <button class="down" data-dir="down">▼</button>
   </div>
 </div>
 
@@ -221,6 +224,17 @@
     <div class="event-title" id="eventTitle">目覚め</div>
     <div class="event-desc" id="eventDesc">―</div>
     <div class="event-choices" id="eventChoices"></div>
+  </div>
+</div>
+
+<!-- 称号記録ルーム -->
+<div class="modal hidden" id="recordsModal">
+  <div class="modal-content" style="max-width:580px;">
+    <div class="modal-tag">― 結末の 記録 ―</div>
+    <div class="modal-title" style="font-size:24px;">これまでの 物語</div>
+    <div class="modal-en" style="margin-bottom:18px;">Chronicle of Endings</div>
+    <div id="recordsBody" style="font-size:13px;line-height:2;text-align:left;margin-bottom:20px;"></div>
+    <button class="btn-modal" onclick="closeRecords()">閉じる</button>
   </div>
 </div>
 
@@ -261,6 +275,22 @@ function initAudio() {
   } catch (e) {
     console.warn('Audio not available', e);
   }
+}
+
+// iOS Safari 対策: ユーザー操作のたびに resume を試みる
+function unlockAudio() {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  // 無音バッファを再生してロック解除
+  try {
+    const buffer = audioCtx.createBuffer(1, 1, 22050);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+  } catch (e) {}
 }
 
 function toggleSound() {
@@ -894,11 +924,20 @@ function newState() {
     fight: 0, accept: 0, escape: 0, observe: 0,
     items: {}, unlocks: {}, specials: {},
     unfairCount: 0, killCount: 0, totalSteps: 0,
-    map: null, biome: 'dawn',
+    map: null, biome: 'dawn', dayPalette: null,
     player: { x: 1, y: 1, dir: 0, px: 32, py: 32, walkFrame: 0 },
     enemies: [], stair: null,
     eventDone: false, gameOver: false, inBattle: false,
     animFrame: 0,
+    // 裏ルート関連
+    secretSteps: 0,
+    secretKills: 0,
+    secretSpawned: 0,
+    hiddenStair: null,
+    angel: null,
+    memoryItems: [],
+    pastSelfDefeated: false,
+    fromHiddenRoute: false,
   };
 }
 
@@ -932,13 +971,35 @@ const SPRITES = {
   heroR_0: ["................",".....KKKKKKKK...","....KbbbbbbbbK..","...KbwwwwwwwwwK.","...KbwwwwwwwwwK.","...KKKKKKKKKKK..","...KnnsssssnnK..","..KksskssskksskK","..KksssssssssnK.","...KnsssssssnK..","....KKKKKKKK....","...KKKKKKKKKK...","...KKrrrrrrKK...","...KKKKKKKKKK...","......KnnKKnnK..","......KKK..KKK.."],
   heroR_1: ["................",".....KKKKKKKK...","....KbbbbbbbbK..","...KbwwwwwwwwwK.","...KbwwwwwwwwwK.","...KKKKKKKKKKK..","...KnnsssssnnK..","..KksskssskksskK","..KksssssssssnK.","...KnsssssssnK..","....KKKKKKKK....","...KKKKKKKKKK...","...KKrrrrrrKK...","...KKKKKKKKKK...","......KnnK......","......KKK......."],
   heroR_2: ["................",".....KKKKKKKK...","....KbbbbbbbbK..","...KbwwwwwwwwwK.","...KbwwwwwwwwwK.","...KKKKKKKKKKK..","...KnnsssssnnK..","..KksskssskksskK","..KksssssssssnK.","...KnsssssssnK..","....KKKKKKKK....","...KKKKKKKKKK...","...KKrrrrrrKK...","...KKKKKKKKKK...","..........KnnK..","..........KKK..."],
-  // 抽象的な敵スプライト (各章の影)
-  shadow_a: ["................","....KKKKKKKK....","...KAAAAAAAAK...","..KAaaaaaaaaAK..","..KAawwAAwwaAK..","..KAawkAAwkaAK..","..KAaaaaaaaaAK..","..KAAaaaaaaAAK..","..KAAAaaaaAAAK..","..KAAAAAAAAAAK..","...KAAAAAAAAK...","....KAAAAAAK....",".....KAAAAK.....","......KAAK......","................","................"],
-  shadow_b: ["................","................","....KKKKKKKK....","...KAAAAAAAAK...","..KAaaaaaaaaAK..","..KAawwAAwwaAK..","..KAawkAAwkaAK..","..KAaaaaaaaaAK..","..KAAaaaaaaAAK..","..KAAAaaaaAAAK..","..KAAAAAAAAAAK..","...KAAAAAAAAK...","....KAAAAAAK....",".....KAAAAK.....","......KAAK......","................"],
-  // フロアにある階段
+  // こうかい (regret) - 青い涙型、目が垂れている
+  e_regret_a: ["................","......KKKK......",".....KuuuuK.....","....KuubbuuK....","...KubwwwwbuK...","..Kubwkbbkw uK..","..KubbwwwwbbuK..","..Kuubbbbbb uK..",".KuubdddddduuK..",".KuudbbbbbbduK..",".KubbddbbddbuK..","..KuubbbbbbuK...","...KuudbbduK....","....KuudduK.....",".....KuuK.......","......KK........"],
+  e_regret_b: ["................","......KKKK......",".....KuuuuK.....","....KuubbuuK....","...KubwwwwbuK...","..Kubwk Kkwb uK.","..KubbwwwwbbuK..","..Kuubbbbbb uK..",".KuubdddddduuK..",".KuudbbbbbbduK..",".KubbddbbddbuK..","..KuubbbbbbuK...","....KuudbbduK...","....KuudduK.....","......KuuK......",".......KK......."],
+  // しゅうちゃく (attach) - 紫の触手型、絡みつく腕
+  e_attach_a: ["....KK.......KK.","....KpK.....KpK.","...KppK....KppK.","..KpppKK..KKppp.","..KpgpppKKpppgp.","..KpgggpKKpgggp.","..KpgwwgKKgwwgp.","..KpgwkgKKgwkgp.","..KpgggpKKpgggp.","..KppGGGGGGppK..","..KKpGgggggGpKK.","...KGggMggMggK..","....KKMggggMKK..","......KGGGGK....","......KGGGGK....","......KKKKKK...."],
+  e_attach_b: ["KK.....KK.....KK","KpK...KpK...KpK.","KppK.KppK.KppK..","KpppKpppKpppK...","KpgpppppgpppK...","KpgggppppgggK...","KpgwwgggwwgK....","KpgwkggwkgpK....","KpgggppgggpK....","KppGGGGGGppK....","KKpGgggggGpKK...",".KGggMggMggK....","..KKMggggMKK....",".....KGGGGK.....","....KGGGGGK.....","....KKKKKKK....."],
+  // きょうふ (fear) - 赤くトゲトゲ、ギザギザの目
+  e_fear_a: [".....K....K.....","....KrKKKKrK....","...KrooooorK....","..KrooorrooorK..","..Krwwoorroww K.",".KroowKKKKKwooK.",".KrooKKrrKKoorK.",".KroooKKKKoooorK","KrooooorrooooorK","KroooorrrrrooorK","KrrrrrrrrrrrrrrK",".KKrrrrrrrrrrKK.","...KrKrKrKrKr...","....KrKrKrK.....","......K.K.......","................"],
+  e_fear_b: ["................",".....K....K.....","....KrKKKKrK....","...KrooooorK....","..KrooorrooorK..","..Krwwoorroww K.",".KroowKKKKKwooK.",".KrooKKrrKKoorK.",".KroooKKKKoooorK","KrooooorrooooorK","KroooorrrrrooorK","KrrrrrrrrrrrrrrK",".KKrrrrrrrrrrKK.","....KrKrKrK.....",".....K.K.K......","................"],
+  // たいくつ (bore) - 緑の腐った塊、半開きの目
+  e_bore_a: ["................","......KKKK......","....KllllllK....","...KlLLLLLLlK...","..KlLwwLLwwLlK..","..KlLwkLLwkLlK..","..KlLLLLLLLLLLK.","..KlLHHHHHHHlK..","..KlllllllllK...","...KlllllllK....","....KKKKKKK.....","................","................","................","................","................"],
+  e_bore_b: ["................","................","......KKKK......","....KllllllK....","...KlLLLLLLlK...","..KlLwwLLwwLlK..","..KlLwkLLwkLlK..","..KlLLLLLLLLLLK.","..KlLHHHHHHHlK..","..KlllllllllK...","...KlllllllK....","....KKKKKKK.....","................","................","................","................"],
+  // こどく (lonely) - 白い亡霊、ぼんやり浮いている
+  e_lonely_a: [".......KKK......","......KccccK....",".....KcccccccK..","....KccwwccwwcK.","....Kcckkcckkc K","....KccccccccK..","....KCcccccccK..","....KCCccccCCK..","....KCCCccCCCK..","...KCKCCCCCCKCK.","..KCK.KCCCCK.KCK",".KCK..KKKKK..KCK","KCK...........KC","................","................","................"],
+  e_lonely_b: ["................",".......KKK......","......KccccK....",".....KcccccccK..","....KccwwccwwcK.","....Kcckkcckkc K","....KccccccccK..","....KCcccccccK..","....KCCccccCCK..","....KCCCccCCCK..","...KCKCCCCCCKCK.","..KCK.KCCCCK.KCK",".KCK..KKKKK..KCK","KCK...........KC","................","................"],
+  // 思い出アイテム (本/手紙風)
+  memory_item: ["................","................","......KKKK......","....KKwwwwKK....","...KwWWWWWWwK...","...KwWPPPPWwK...","...KwWWWWWWwK...","...KwWPPPPWwK...","...KwWWWWWWwK...","...KwwwwwwwwK...","....KKKKKKKK....","................","................","................","................","................"],
+  memory_item_b: ["................","................","......KKKK......","....KKwwwwKK....","...KwWWWWWWwK...","...KwWyyyyWwK...","...KwWWWWWWwK...","...KwWyyyyWwK...","...KwWWWWWWwK...","...KwwwwwwwwK...","....KKKKKKKK....","................","................","................","................","................"],
   stair: ["................","................","KKKKKKKKKKKKKKKK","KAAAAAAAAAAAAAAK","KaaaaaaaaaaaaaaA","KKKKKKKKKKKKKKaA","KAAAAAAAAAAAAKaA","KaaaaaaaaaaaaKaA","KKKKKKKKKKKKaKaA","KAAAAAAAAAAaaKaA","KaaaaaaaaaaKaKaA","KKKKKKKKKKaaKaaA","KAAAAAAAAaaKaKaA","KaaaaaaaaKaaKaaA","KKKKKKKKaaKaKaaA","KAAAAAAaaKaaKaaA"],
   death_a: ["................","....KKKKKKKK....","...KAAAAAAAAK...","..KAAAAAAAAAAK..","..KAAwwwwwwAAK..","..KAAwkkwwkkAK..","..KAAwkkwwkkAK..","..KAAwwwwwwwAK..","..KAAwwkkkkwAK..","..KAAAwwwwwAAK..",".KKAAAAAAAAAAKK.","KooAAAAAAAAAAooK","KooAAAyyyyyAAooK",".KooAAyyyyAAooK.","..KKooAAAAooKK..","....KKKKKKKK...."],
   death_b: ["....KKKKKKKK....","...KAAAAAAAAK...","..KAAAAAAAAAAK..","..KAAwwwwwwAAK..","..KAAwkkwwkkAK..","..KAAwkkwwkkAK..","..KAAwwwwwwwAK..","..KAAwwkkkkwAK..","..KAAAwwwwwAAK..",".KKAAAAAAAAAAKK.","KooAAAAAAAAAAooK","KooAAAyyyyyAAooK","KooAAyyyyyyAAooK",".KooAAyyyyAAooK.","..KKooAAAAooKK..","....KKKKKKKK...."],
+  // 天使スプライト
+  angel_a: [".....KKKKKK.....","....KwwwwwwK....","...KwyyyyyywK...","..KwykkywkkywK..","..KwyssyysssywK.","..KwyssssssyywK.","..KwyssyysssywK.","..KwyyywwwyywK..",".KKwwwwwwwwwwKK.","KwwyyyyyyyyyywwK","KwwyywyywywyywwK","KwwyywwywwywyywK","KwwyyyyyyyyyywwK",".KwwyyywwyyywwK.","..KKwwyyyyyywwK.","....KKwwwwwwK..."],
+  angel_b: [".....KKKKKK.....","....KwwwwwwK....","...KwyyyyyywK...","..KwykkywkkywK..","..KwyssyysssywK.","..KwyssssssyywK.","..KwyssyysssywK.","..KwyyywwwyywK..","KKwwwwwwwwwwwwKK","wwwyyyyyyyyyywww","KwwyywyywywyywwK","KwwyywwywwywyywK","KwwyyyyyyyyyywwK",".KwwyyywwyyywwK.","..KKwwyyyyyywwK.","....KKwwwwwwK..."],
+  // 過去の自分（プレイヤーと同じ姿）
+  past_self_a: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbwwwwwwwwbK..","..KbwwwwwwwwwK..","..KKKKKKKKKKKK..","..KnnssssssnnK..","..KnsskkssksskK.","..KnssssssssskK.","..KnsssssssssnK.","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKrrrrrrrrKK..","..KKKKKKKKKKKK..","....KnnKKnnK....","....KKK..KKK...."],
+  past_self_b: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbwwwwwwwwbK..","..KbwwwwwwwwwK..","..KKKKKKKKKKKK..","..KnnssssssnnK..","..KnsskkssksskK.","..KnssssssssskK.","..KnsssssssssnK.","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKrrrrrrrrKK..","..KKKKKKKKKKKK..","....KKK.KnnK....","....KKK..KKK...."],
+  // 隠し階段（金色っぽい）
+  hidden_stair: ["................","................","KyyyyyyyyyyyyyyK","KyYYYYYYYYYYYYyK","KyyyyyyyyyyyyyYy","KKKKKKKKKKKKKKyY","KyYYYYYYYYYYYKyY","KyyyyyyyyyyyyKyY","KKKKKKKKKKKKyKyY","KyYYYYYYYYYyyKyY","KyyyyyyyyyyKyKyY","KKKKKKKKKKyyKyyY","KyYYYYYYYyyKyKyY","KyyyyyyyyKyyKyyY","KKKKKKKKyyKyKyyY","KyYYYYYyyKyyKyyY"],
 };
 
 // 章ごとのバイオーム
@@ -949,27 +1010,657 @@ const BIOMES = {
   pale:   { f1: '#c0c0d8', f2: '#a0a0b8', f3: '#e0e0f0', fa: '#808098', fb: '#f0f0ff', w1: '#5a5a70', w2: '#2a2a3a', w3: '#101018', tint: 0 },
 };
 
-// ============ MAP GENERATION ============
-function genMap() {
-  const map = Array.from({length: GRID_H}, () => Array(GRID_W).fill(1));
-  const rooms = [];
-  const numRooms = 4 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < numRooms; i++) {
-    const rw = 4 + Math.floor(Math.random() * 5);
-    const rh = 3 + Math.floor(Math.random() * 3);
-    const rx = 1 + Math.floor(Math.random() * (GRID_W - rw - 2));
-    const ry = 1 + Math.floor(Math.random() * (GRID_H - rh - 2));
-    for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
-    rooms.push({ x: rx + Math.floor(rw/2), y: ry + Math.floor(rh/2) });
+// Day別の床/壁カラースキーム
+// Day 1-25: 朝焼け→夕暮れ→深夜へグラデーション
+// Day 26-30: 白い世界（薄明）
+function getDayPalette(day) {
+  if (day === 0) {
+    // 光に包まれた部屋
+    return {
+      f1: '#fff8e0', f2: '#f0e8c8', f3: '#ffffff',
+      fa: '#e0d8b0', fb: '#ffffff',
+      w1: '#f8e8b0', w2: '#e0c890', w3: '#c8a868',
+    };
   }
-  for (let i = 0; i < rooms.length - 1; i++) {
-    let { x: x1, y: y1 } = rooms[i];
-    const { x: x2, y: y2 } = rooms[i+1];
-    while (x1 !== x2) { map[y1][x1] = 0; x1 += x1 < x2 ? 1 : -1; }
-    while (y1 !== y2) { map[y1][x1] = 0; y1 += y1 < y2 ? 1 : -1; }
+  if (day <= 25) {
+    // Day 1 → Day 25 のグラデーション
+    // 開始: 明るい暖色 (cream/peach)、終了: ほぼ黒紫
+    const t = (day - 1) / 24; // 0..1
+    // 色補間ヘルパー
+    const lerp = (a, b) => Math.round(a + (b - a) * t);
+    const hex = (r, g, b) => '#' + [r,g,b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2,'0')).join('');
+    // 床 (明 → 暗)
+    const f1r = lerp(220, 30),  f1g = lerp(190, 20),  f1b = lerp(160, 40);
+    const f2r = lerp(180, 18),  f2g = lerp(150, 12),  f2b = lerp(125, 28);
+    const f3r = lerp(240, 50),  f3g = lerp(215, 35),  f3b = lerp(185, 60);
+    const far = lerp(140, 8),   fag = lerp(110, 5),   fab = lerp(85, 16);
+    const fbr = lerp(255, 75),  fbg = lerp(235, 55),  fbb = lerp(210, 85);
+    // 壁 (常に暗いがやや変化)
+    const w1r = lerp(110, 12),  w1g = lerp(80, 8),    w1b = lerp(60, 22);
+    const w2r = lerp(60, 4),    w2g = lerp(40, 2),    w2b = lerp(30, 10);
+    return {
+      f1: hex(f1r, f1g, f1b),
+      f2: hex(f2r, f2g, f2b),
+      f3: hex(f3r, f3g, f3b),
+      fa: hex(far, fag, fab),
+      fb: hex(fbr, fbg, fbb),
+      w1: hex(w1r, w1g, w1b),
+      w2: hex(w2r, w2g, w2b),
+      w3: hex(w2r * 0.5 | 0, w2g * 0.5 | 0, w2b * 0.5 | 0),
+    };
+  } else {
+    // Day 26-30: 白基調
+    const t = (day - 26) / 4; // 0..1
+    const lerp = (a, b) => Math.round(a + (b - a) * t);
+    const hex = (r, g, b) => '#' + [r,g,b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2,'0')).join('');
+    // 床 (薄いクリーム→純白)
+    const f1r = lerp(220, 250), f1g = lerp(220, 248), f1b = lerp(230, 252);
+    const f2r = lerp(190, 220), f2g = lerp(190, 218), f2b = lerp(205, 230);
+    const f3r = lerp(245, 255), f3g = lerp(245, 255), f3b = lerp(255, 255);
+    const far = lerp(160, 190), fag = lerp(160, 188), fab = lerp(180, 210);
+    const fbr = lerp(255, 255), fbg = lerp(255, 255), fbb = lerp(255, 255);
+    // 壁 (薄いグレー→ごく薄)
+    const w1r = lerp(140, 200), w1g = lerp(140, 200), w1b = lerp(160, 215);
+    const w2r = lerp(90, 140),  w2g = lerp(90, 138),  w2b = lerp(110, 160);
+    return {
+      f1: hex(f1r, f1g, f1b),
+      f2: hex(f2r, f2g, f2b),
+      f3: hex(f3r, f3g, f3b),
+      fa: hex(far, fag, fab),
+      fb: hex(fbr, fbg, fbb),
+      w1: hex(w1r, w1g, w1b),
+      w2: hex(w2r, w2g, w2b),
+      w3: hex(w2r * 0.5 | 0, w2g * 0.5 | 0, w2b * 0.5 | 0),
+    };
   }
-  return { map, rooms };
 }
+
+// ============ 固定マップ定義 ============
+// 凡例:
+//   # = 壁
+//   . = 床
+//   @ = プレイヤー開始位置
+//   > = 階段
+//   1-5 = 敵 (1:regret 2:attach 3:fear 4:bore 5:lonely)
+//   a-e = 思い出アイテム
+// マップは 24 x 16 グリッド
+
+const FIXED_MAPS = {
+// Day 0: 光に包まれた部屋（裏ルート）
+0: [
+  "########################",
+  "########################",
+  "#######............#####",
+  "######..............####",
+  "#####................###",
+  "####..................##",
+  "####........A.........##",
+  "####..................##",
+  "####..................##",
+  "####..................##",
+  "#####................###",
+  "######..............####",
+  "#######............#####",
+  "########............####",
+  "#########@..............",
+  "########################",
+],
+1: [
+  "########################",
+  "#@..............#......#",
+  "#...####........#......#",
+  "#...#..#........#......#",
+  "#...####.........###...#",
+  "#.................#....#",
+  "######..####......#....#",
+  "#....#..#a.#......#....#",
+  "#....#..####......#.>..#",
+  "#....#............#....#",
+  "#....#.......######....#",
+  "#....##......#....#....#",
+  "#.....#......#.b..#....#",
+  "#.....#......######....#",
+  "#......................#",
+  "########################",
+],
+2: [
+  "########################",
+  "#@.....................#",
+  "#.######.####.#######..#",
+  "#.#....#.#..#.#.....#..#",
+  "#.#.a..#.#..#.#..b..#..#",
+  "#.#....#.#..#.#.....#..#",
+  "#.######.#..#.#######..#",
+  "#........#..#..........#",
+  "#........####..........#",
+  "#......................#",
+  "#####.............######",
+  "#...#.............#....#",
+  "#...####....#######....#",
+  "#......#....#.....>....#",
+  "#......#....#..........#",
+  "########################",
+],
+3: [
+  "########################",
+  "#@..#..................#",
+  "#...#.#####.#####......#",
+  "#...#.#...#.#...#......#",
+  "#...#.#.a.#.#.b.#......#",
+  "#.....#...#.#...#......#",
+  "#.....#####.#####......#",
+  "######..................#",
+  "#....#..####............#",
+  "#....#..#..#............#",
+  "#.1..#..#..#............#",
+  "#....#..#..#......######",
+  "#....#..####......#....#",
+  "#....#............#.>..#",
+  "#....#............#....#",
+  "########################",
+],
+4: [
+  "########################",
+  "#@.....................#",
+  "#..#################...#",
+  "#..#...............#...#",
+  "#..#.a...........b.#...#",
+  "#..#...............#...#",
+  "#..#####.#####.#####...#",
+  "#......#.#...#.#.......#",
+  "#......#.#.1.#.#.......#",
+  "#......#.#...#.#.......#",
+  "#......#.#####.#.......#",
+  "#......###...###.......#",
+  "#........#...#.........#",
+  "#........#.>.#.........#",
+  "#........#####.........#",
+  "########################",
+],
+5: [
+  "########################",
+  "#@..........#..........#",
+  "#...........#..........#",
+  "#....a......#......b...#",
+  "#...........#..........#",
+  "#...........#..........#",
+  "#####.#######.######.###",
+  "#.....#.....#.#......#.#",
+  "#.....#.....#.#......#.#",
+  "#.....#.....#.#......#.#",
+  "#####.########.######.##",
+  "#....................#.#",
+  "#....................#.#",
+  "#.................c..#.#",
+  "#....................>.#",
+  "########################",
+],
+6: [
+  "########################",
+  "#@...####..............#",
+  "#....#..#.....a........#",
+  "#....#..#..............#",
+  "#....####.....######...#",
+  "#.............#....#...#",
+  "#......1......#.b..#...#",
+  "#.............#....#...#",
+  "######........######...#",
+  "#....#.................#",
+  "#....#...........######",
+  "#.c..#...........#....#",
+  "#....#.....2.....#.>..#",
+  "#....#...........#....#",
+  "#....#...........#....#",
+  "########################",
+],
+7: [
+  "########################",
+  "#@.....................#",
+  "#......#######.........#",
+  "#......#.....#.........#",
+  "#......#..a..#.........#",
+  "#......#.....#.........#",
+  "#......##.#.##.........#",
+  "#.........#............#",
+  "#.........#............#",
+  "######....#....######..#",
+  "#....#....#....#....#..#",
+  "#.>..#....#....#.b..#..#",
+  "#....#....#....#....#..#",
+  "######....#....######..#",
+  "#.........#............#",
+  "########################",
+],
+8: [
+  "########################",
+  "#@.....................#",
+  "#..####################",
+  "#..#a..............#...#",
+  "#..#...............#...#",
+  "#..#...............#...#",
+  "#..#####.....#######...#",
+  "#......#.....#.........#",
+  "#......#..2..#.........#",
+  "#......#.....#.........#",
+  "#......#######.........#",
+  "######.................#",
+  "#....#.............b...#",
+  "#.>..#.................#",
+  "#....#.................#",
+  "########################",
+],
+9: [
+  "########################",
+  "#@.........#...........#",
+  "#..........#...........#",
+  "#.....a....#.....b.....#",
+  "#..........#...........#",
+  "#..........#...........#",
+  "#######..######..#######",
+  "#.....#..#....#..#.....#",
+  "#.....#..#.3..#..#.....#",
+  "#.....#..#....#..#.....#",
+  "#######..######..#######",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#..................>...#",
+  "########################",
+],
+10: [
+  "########################",
+  "#@.....................#",
+  "#...##############.....#",
+  "#...#............#.....#",
+  "#...#...a....b...#.....#",
+  "#...#............#.....#",
+  "#...####.....#####.....#",
+  "#......#.....#.........#",
+  "#......#..1..#.........#",
+  "#......#.....#.........#",
+  "#......#######.........#",
+  "#......................#",
+  "#.................2....#",
+  "#......................#",
+  "#..................>...#",
+  "########################",
+],
+11: [
+  "########################",
+  "#@.....................#",
+  "#..######..######..####",
+  "#..#a...#..#....#..#..#",
+  "#..#....#..#.b..#..#c.#",
+  "#..#....#..#....#..#..#",
+  "#..####.#..#.####..####",
+  "#......##..##..........#",
+  "#......................#",
+  "#######...........######",
+  "#.....#.....1.....#....#",
+  "#.....#.....2.....#....#",
+  "#.....#...........#.>..#",
+  "#.....#...........#....#",
+  "#.....#...........#....#",
+  "########################",
+],
+12: [
+  "########################",
+  "#@..........#.........>#",
+  "#...........#..........#",
+  "#...........#..........#",
+  "#.....a.....#.....b....#",
+  "#...........#..........#",
+  "############.###########",
+  "#......................#",
+  "#......................#",
+  "#.....##############...#",
+  "#.....#............#...#",
+  "#.....#.....c......#...#",
+  "#.....#............#...#",
+  "#.....##############...#",
+  "#......................#",
+  "########################",
+],
+13: [
+  "########################",
+  "#@.....................#",
+  "#..####################",
+  "#..#...................#",
+  "#..#......a............#",
+  "#..#...................#",
+  "#..#.....#######.......#",
+  "#..#.....#.....#.......#",
+  "#..#.....#..1..#.......#",
+  "#........#.....#.......#",
+  "#........#######.......#",
+  "#......................#",
+  "#............b.........#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+14: [
+  "########################",
+  "#@.....................#",
+  "#......#########.......#",
+  "#......#.......#.......#",
+  "#......#...a...#.......#",
+  "#......#.......#.......#",
+  "#......##.....##.......#",
+  "#.......#.....#........#",
+  "#.......#..3..#........#",
+  "#.......#.....#........#",
+  "#.......#######........#",
+  "#......................#",
+  "#......b...........c...#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+15: [
+  "########################",
+  "#@.....................#",
+  "#..####.....####.......#",
+  "#..#..#.....#..#.......#",
+  "#..#a.#.....#.b#.......#",
+  "#..#..#.....#..#.......#",
+  "#..####.....####.......#",
+  "#......................#",
+  "#......................#",
+  "#######........#########",
+  "#.....#....1...#.......#",
+  "#.....#....2...#.......#",
+  "#.....#........#.......#",
+  "#.....##########.......#",
+  "#...................>..#",
+  "########################",
+],
+16: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#.....##############...#",
+  "#.....#............#...#",
+  "#.....#.....a......#...#",
+  "#.....#............#...#",
+  "#.....##############...#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#............1.........#",
+  "#............b.........#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+17: [
+  "########################",
+  "#@.....................#",
+  "#..####################",
+  "#..#a..............b...#",
+  "#..#...................#",
+  "#..#####.....##########",
+  "#......#.....#.........#",
+  "#......#..5..#.........#",
+  "#......#.....#.........#",
+  "#......#######.........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#.....c................#",
+  "#...................>..#",
+  "########################",
+],
+18: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#..##################..#",
+  "#..#................#..#",
+  "#..#...a.........b..#..#",
+  "#..#................#..#",
+  "#..####.........#####..#",
+  "#......#........#......#",
+  "#......#...4....#......#",
+  "#......#........#......#",
+  "#......##########......#",
+  "#......................#",
+  "#.....c................#",
+  "#...................>..#",
+  "########################",
+],
+19: [
+  "########################",
+  "#@.....................#",
+  "#..####################",
+  "#..#...................#",
+  "#..#......a............#",
+  "#..#...................#",
+  "#..#####.....##########",
+  "#......#.....#.........#",
+  "#......#..1..#.........#",
+  "#......#..2..#.........#",
+  "#......#######.........#",
+  "#......................#",
+  "#............b.........#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+20: [
+  "########################",
+  "#@..........#.........>#",
+  "#...........#..........#",
+  "#...........#..........#",
+  "#.....a.....#.....b....#",
+  "#...........#..........#",
+  "############.###########",
+  "#......................#",
+  "#......................#",
+  "#.....##############...#",
+  "#.....#............#...#",
+  "#.....#.....c......#...#",
+  "#.....#............#...#",
+  "#.....##############...#",
+  "#......................#",
+  "########################",
+],
+21: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#......######..........#",
+  "#......#....#..........#",
+  "#......#.a..#..........#",
+  "#......######..........#",
+  "#......................#",
+  "#............1.........#",
+  "#......................#",
+  "######........##########",
+  "#....#....2...#........#",
+  "#....#........#.....b..#",
+  "#....##########........#",
+  "#...................>..#",
+  "########################",
+],
+22: [
+  "########################",
+  "#@.....................#",
+  "#..####################",
+  "#..#a..............b...#",
+  "#..#...................#",
+  "#..#####.....##########",
+  "#......#.....#.........#",
+  "#......#..3..#.........#",
+  "#......#.....#.........#",
+  "#......#######.........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#.....c................#",
+  "#...................>..#",
+  "########################",
+],
+23: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#..##################..#",
+  "#..#................#..#",
+  "#..#...a.........b..#..#",
+  "#..#................#..#",
+  "#..####.........#####..#",
+  "#......#........#......#",
+  "#......#..1..2..#......#",
+  "#......#........#......#",
+  "#......##########......#",
+  "#......................#",
+  "#.....c................#",
+  "#...................>..#",
+  "########################",
+],
+24: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#......######..........#",
+  "#......#....#..........#",
+  "#......#.a..#..........#",
+  "#......######..........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......b...........c...#",
+  "#...................>..#",
+  "########################",
+],
+25: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#..####################",
+  "#..#a............b.....#",
+  "#..#...................#",
+  "#..#...................#",
+  "#......................#",
+  "#............1.........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#.....c................#",
+  "#...................>..#",
+  "########################",
+],
+26: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#..####################",
+  "#..#...................#",
+  "#..#.....a.............#",
+  "#..#...................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+27: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#..####################",
+  "#..#...................#",
+  "#..#.....a..........b..#",
+  "#..#...................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+28: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#......................#",
+  "#......######..........#",
+  "#......#....#..........#",
+  "#......#.a..#..........#",
+  "#......######..........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+29: [
+  "########################",
+  "#@.....................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#.....a.............b..#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
+  "########################",
+],
+};
+
+// 思い出アイテム a-e ごとのテキスト (Day別)
+const MEMORY_ITEMS_BY_DAY = {
+  1: { a: '机の上に 鍵が ひとつ。\nどこかで 見た気がする。', b: '小さな ぬいぐるみ。\n名前は 思い出せない。' },
+  2: { a: '砂場の おもちゃ。\n誰かと 取り合った。', b: '画用紙に 描かれた家族。\n5人いた。今は 違う。' },
+  3: { a: 'すべり台の 滑り出し位置。\nもう怖くない 高さだ。', b: '空き缶。サイダーの匂いがする。\nあの夏の。' },
+  4: { a: '黒板の 端の落書き。\nハートマーク。' },
+  5: { a: '部活の バッグ。\n土の匂い。', b: '渡せなかった 手紙。\n封がされたまま。', c: '電車の 切符。\n初めての遠出。' },
+  6: { a: '受験票。\n緊張で 手が震えていた。', b: '合格通知。\n誰かが 泣いていた。' },
+  7: { a: '駅のホーム。\n誰かが 改札の向こうで 手を振っていた。', b: '寮の鍵。\n初めて 一人で寝た夜。' },
+  8: { a: '名刺。\n肩書きが 何の意味も持たなくなった。', b: '満員電車の 吊り革。' },
+  9: { a: '居酒屋の 領収書。\n誰と飲んだのか 思い出せない。', b: '深夜のタクシー。\n窓の外が ぼやけていた。' },
+  10: { a: '同期の 結婚式の招待状。', b: '自分には 届かなかった招待状。' },
+  11: { a: '提出した 企画書。\n通らなかった。', b: '通った 企画書。\n誰かの名前で。' },
+  12: { a: 'ぐしゃぐしゃに 丸められた紙。\nこれは 自分のだ。', b: '上司の 万年筆。\n赤いインクが 滲んでいる。', c: '残業の 蛍光灯。' },
+  13: { a: '送別会の 寄せ書き。', b: '誰の名前か 思い出せない。' },
+  14: { a: '昇進の 辞令。\n隣の同期に だけ届いた。', b: '誰かの SNS。\n眩しすぎて 閉じた。' },
+  15: { a: '空きビン。\n何杯目か 数えるのを やめた。', b: '居酒屋の トイレの鏡。\n自分の顔を 見たくなかった。' },
+  16: { a: '人間ドックの 結果。\n要再検査。', b: '通帳。\n意外と 残っていた。' },
+  17: { a: '黒い スーツ。\n葬式の数が 増えた。', b: '弔電の 文面。' },
+  18: { a: '住宅ローンの 契約書。\n35年。', b: '車のキー。\n外車。誰のための。', c: '時計。\n高かった。' },
+  19: { a: 'NDA の書類。\n何かを 隠す契約。', b: '別の 契約書。\n白紙のまま。' },
+  20: { a: '社員賞の トロフィー。\n埃を かぶっている。', b: '感謝状。\n読み返さない。', c: '出席簿の 自分の名前。' },
+  21: { a: '学生時代の 集合写真。\n誰が 誰だったか。', b: '居酒屋で 拾った財布。\n返した気がする。' },
+  22: { a: '別の人生の 履歴書。\n誰かが 書きかけて 残した。', b: '転職案内の メール。\n開いていない。' },
+  23: { a: '会社のロゴ入り 名刺ホルダー。\n名刺が 残り3枚。', b: '退職届。\n書きかけ。', c: '同窓会の 案内。' },
+  24: { a: '老眼鏡。\n二つ目。', b: '杖。\nまだ 使っていない。' },
+  25: { a: '昔の家族写真。\n端の方に 自分がいる。', b: '誰かの 手紙。\n読み返している。', c: '空のカップ。' },
+  26: { a: '病院の リストバンド。' },
+  27: { a: '誰かの 名前を呼ぶ声。\n誰だったか。', b: '点滴の チューブ。' },
+  28: { a: '窓の外の 桜。\nもう 散ったのか 咲くのか。' },
+  29: { a: '机の上の 老眼鏡。\n誰のだったか。', b: 'ベッドサイドの 写真立て。' },
+};
 
 function findEmpty(map, taken, awayFrom, minDist = 0) {
   for (let tries = 0; tries < 500; tries++) {
@@ -989,14 +1680,15 @@ function findEmpty(map, taken, awayFrom, minDist = 0) {
 function loadDay(day) {
   if (day > 30) return;
   const chapter = getChapter(day);
-  const prevChapterId = state.day ? getChapter(state.day).id : null;
   state.day = day;
-  state.biome = chapter.biome;
+  state.biome = day === 0 ? 'pale' : chapter.biome;
+  state.dayPalette = getDayPalette(day);
   state.eventDone = false;
 
   // 章が変わったらBGM変更（初回も含む）
-  if (musicEnabled && (!currentMusic || currentMusic.chapter !== chapter.biome)) {
-    playMusic(chapter.biome);
+  const targetMusic = day === 0 ? 'pale' : chapter.biome;
+  if (musicEnabled && (!currentMusic || currentMusic.chapter !== targetMusic)) {
+    playMusic(targetMusic);
   }
 
   // Day 30 (死神) は特殊
@@ -1006,33 +1698,157 @@ function loadDay(day) {
     return;
   }
 
-  const { map, rooms } = genMap();
-  state.map = map;
-  const startRoom = rooms[0];
-  state.player = { x: startRoom.x, y: startRoom.y, dir: 0, px: startRoom.x * TILE, py: startRoom.y * TILE, walkFrame: 0 };
-  const playerPos = { x: state.player.x, y: state.player.y };
-  const taken = [playerPos];
-
-  // 階段 (last room)
-  const lastRoom = rooms[rooms.length - 1];
-  state.stair = { x: lastRoom.x, y: lastRoom.y };
-  taken.push(state.stair);
-
-  // 敵 (影): Day 5 以降から 控えめに出現
-  state.enemies = [];
-  const enemyCount = day < 5 ? 0 : day < 12 ? 1 : day < 20 ? 1 : day < 26 ? 2 : 1;
-  for (let i = 0; i < enemyCount; i++) {
-    const pos = findEmpty(map, taken, playerPos, 5);
-    if (!pos) break;
-    state.enemies.push(makeShadow(pos, day));
-    taken.push(pos);
+  // 固定マップを解釈
+  const mapTpl = FIXED_MAPS[day];
+  if (mapTpl) {
+    parseFixedMap(mapTpl, day);
+  } else {
+    // フォールバック
+    const map = Array.from({length: GRID_H}, () => Array(GRID_W).fill(1));
+    for (let y = 1; y < GRID_H - 1; y++) for (let x = 1; x < GRID_W - 1; x++) map[y][x] = 0;
+    state.map = map;
+    state.player = { x: 2, y: 2, dir: 0, px: 2*TILE, py: 2*TILE, walkFrame: 0 };
+    state.stair = { x: GRID_W - 3, y: GRID_H - 3 };
+    state.enemies = [];
+    state.memoryItems = [];
   }
 
-  document.getElementById('floorName').textContent = `― ${chapter.name} ―`;
-  document.getElementById('dayLabel').textContent = `Day ${day}`;
+  document.getElementById('floorName').textContent = day === 0 ? '― 光に包まれた部屋 ―' : `― ${chapter.name} ―`;
+  document.getElementById('dayLabel').textContent = day === 0 ? 'Day 0' : `Day ${day}`;
   updateStats();
-  log(`Day ${day}. ${chapter.name}の階。`, 'epic');
+  if (day === 0) {
+    log('Day 0. 光に包まれた 部屋。', 'epic');
+    log('奥に 何かが いる...', 'good');
+  } else {
+    log(`Day ${day}. ${chapter.name}の階。`, 'epic');
+  }
   if (state.day === 1) log('階段を上れ。終わりは そう遠くない。', 'dim');
+  if (state.day === 5) log('（何かが 起きそうな 気配...）', 'dim');
+}
+
+function parseFixedMap(tpl, day) {
+  const map = Array.from({length: GRID_H}, () => Array(GRID_W).fill(1));
+  state.enemies = [];
+  state.memoryItems = [];
+  state.stair = null;
+  state.hiddenStair = null;
+  state.angel = null;
+  state.player = { x: 1, y: 1, dir: 0, px: TILE, py: TILE, walkFrame: 0 };
+  const kindMap = { '1':'regret', '2':'attach', '3':'fear', '4':'bore', '5':'lonely' };
+  const memTexts = MEMORY_ITEMS_BY_DAY[day] || {};
+
+  for (let y = 0; y < GRID_H; y++) {
+    const row = tpl[y] || '';
+    for (let x = 0; x < GRID_W; x++) {
+      const ch = row[x] || '#';
+      if (ch === '#') {
+        map[y][x] = 1;
+      } else {
+        map[y][x] = 0;
+        if (ch === '@') {
+          state.player = { x, y, dir: 0, px: x*TILE, py: y*TILE, walkFrame: 0 };
+        } else if (ch === '>') {
+          state.stair = { x, y };
+        } else if (ch === 'A') {
+          // 天使
+          state.angel = { x, y, px: x*TILE, py: y*TILE };
+        } else if (kindMap[ch]) {
+          const kind = kindMap[ch];
+          state.enemies.push(makeFixedShadow({ x, y }, day, kind));
+        } else if (ch >= 'a' && ch <= 'e') {
+          state.memoryItems.push({ x, y, text: memTexts[ch] || '何かが あった気がする。', read: false });
+        }
+      }
+    }
+  }
+  state.map = map;
+}
+
+function makeFixedShadow(pos, day, kind) {
+  const lvBoost = Math.floor((day - 5) / 3);
+  const baseStats = {
+    regret:  { hp: 8,  atk: 3 },
+    attach:  { hp: 12, atk: 4 },
+    fear:    { hp: 6,  atk: 5 },
+    bore:    { hp: 16, atk: 3 },
+    lonely:  { hp: 10, atk: 4 },
+  };
+  const t = SHADOW_TYPES[kind];
+  const s = baseStats[kind];
+  const hp = s.hp + lvBoost * 4;
+  return {
+    ...pos, kind, name: t.name, ai: t.ai,
+    hp, maxHp: hp, atk: s.atk + Math.floor(lvBoost * 0.8), def: Math.floor(lvBoost / 2),
+    sight: t.ai === 'teleport' ? 99 : t.ai === 'fast' ? 9 : t.ai === 'wander' ? 4 : 6,
+    px: pos.x * TILE, py: pos.y * TILE,
+    teleportCooldown: 0,
+    actions: ['attack', 'attack', 'attack', 'sharp'],
+  };
+}
+
+// ============ 裏ルート用 特殊ボス ============
+function makeAngelBoss() {
+  // Day0 の天使（強いが倒せる）
+  return {
+    x: 0, y: 0, px: 0, py: 0,
+    kind: 'angel', name: '天使',
+    hp: 80, maxHp: 80, atk: 8, def: 3,
+    sight: 99, ai: 'static',
+    actions: ['attack', 'attack', 'sharp', 'judgment'],
+    isBoss: true,
+  };
+}
+
+function makeAngelFinalBoss() {
+  // ラスボス天使（Day0の100倍）
+  return {
+    x: 0, y: 0, px: 0, py: 0,
+    kind: 'angel_boss', name: '堕ちた天使',
+    hp: 8000, maxHp: 8000, atk: 30, def: 8,
+    sight: 99, ai: 'static',
+    actions: ['attack', 'sharp', 'judgment', 'judgment'],
+    isBoss: true,
+  };
+}
+
+function makePastSelf() {
+  return {
+    x: 0, y: 0, px: 0, py: 0,
+    kind: 'past_self', name: '過去の自分',
+    hp: 200, maxHp: 200, atk: 15, def: 4,
+    sight: 99, ai: 'static',
+    actions: ['attack', 'attack', 'sharp', 'cry'],
+    isBoss: true,
+  };
+}
+
+// 裏ルート: Day5 の特殊スポーン
+function spawnSecretShadow() {
+  // プレイヤーから距離のある空きマスを探す
+  const candidates = [];
+  for (let y = 1; y < GRID_H - 1; y++) {
+    for (let x = 1; x < GRID_W - 1; x++) {
+      if (state.map[y][x] !== 0) continue;
+      if (state.enemies.some(e => e.x === x && e.y === y)) continue;
+      if (state.player.x === x && state.player.y === y) continue;
+      const d = Math.abs(x - state.player.x) + Math.abs(y - state.player.y);
+      if (d < 4) continue;
+      candidates.push({ x, y, d });
+    }
+  }
+  if (candidates.length === 0) return;
+  const pos = candidates[Math.floor(Math.random() * candidates.length)];
+  // 弱めの敵をランダム選択
+  const kinds = ['regret', 'attach', 'fear', 'bore', 'lonely'];
+  const kind = kinds[Math.floor(Math.random() * kinds.length)];
+  const enemy = makeFixedShadow(pos, 5, kind);
+  enemy.isSecret = true; // 裏ルート判別用フラグ
+  state.enemies.push(enemy);
+  state.secretSpawned++;
+  log(`どこからともなく ${enemy.name}が 現れた...`, 'warn');
+  if (state.secretSpawned === 1) {
+    log('（10匹 倒すと 何かが変わるかもしれない）', 'dim');
+  }
 }
 
 function loadDeathFloor() {
@@ -1099,7 +1915,7 @@ function drawSpriteCentered(ctx, sprite, tileX, tileY, scale) {
 }
 
 function drawFloorTile(ctx, x, y, biome) {
-  const b = BIOMES[biome] || BIOMES.dawn;
+  const b = state.dayPalette || BIOMES.dawn;
   const px = x * TILE, py = y * TILE;
   ctx.fillStyle = b.f1; ctx.fillRect(px, py, TILE, TILE);
   ctx.fillStyle = b.f3; ctx.fillRect(px, py, TILE, 1); ctx.fillRect(px, py, 1, TILE);
@@ -1112,7 +1928,7 @@ function drawFloorTile(ctx, x, y, biome) {
 }
 
 function drawWallTile(ctx, x, y, biome) {
-  const b = BIOMES[biome] || BIOMES.dawn;
+  const b = state.dayPalette || BIOMES.dawn;
   const px = x * TILE, py = y * TILE;
   ctx.fillStyle = b.w1; ctx.fillRect(px, py, TILE, TILE);
   ctx.fillStyle = b.w2;
@@ -1138,9 +1954,44 @@ function drawField() {
   if (state.stair) {
     drawSpriteCentered(ctx, SPRITES.stair, state.stair.x * TILE, state.stair.y * TILE, SCALE);
   }
+  // 隠し階段（金色、光るエフェクト付き）
+  if (state.hiddenStair) {
+    const hx = state.hiddenStair.x * TILE;
+    const hy = state.hiddenStair.y * TILE;
+    // 光るオーラ
+    const pulse = Math.sin(state.animFrame / 8) * 0.5 + 0.5;
+    ctx.fillStyle = `rgba(255, 220, 100, ${0.3 + pulse * 0.3})`;
+    ctx.beginPath();
+    ctx.arc(hx + TILE/2, hy + TILE/2, 12 + pulse * 4, 0, Math.PI * 2);
+    ctx.fill();
+    drawSpriteCentered(ctx, SPRITES.hidden_stair, hx, hy, SCALE);
+  }
+  // 天使
+  if (state.angel) {
+    const aFrame = Math.floor(state.animFrame / 18) % 2 === 0 ? 'a' : 'b';
+    const sp = SPRITES[`angel_${aFrame}`];
+    const bob = Math.round(Math.sin(state.animFrame / 14) * 2);
+    // 後光
+    const ax = state.angel.x * TILE;
+    const ay = state.angel.y * TILE;
+    const halo = Math.sin(state.animFrame / 10) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255, 240, 180, ${0.25 * halo})`;
+    ctx.beginPath();
+    ctx.arc(ax + TILE/2, ay + TILE/2, 22 + halo * 6, 0, Math.PI * 2);
+    ctx.fill();
+    if (sp) drawSpriteCentered(ctx, sp, ax, ay + bob, SCALE);
+  }
+  // 思い出アイテム
+  if (state.memoryItems) {
+    const memBob = Math.round(Math.sin(state.animFrame / 20) * 1);
+    for (const m of state.memoryItems) {
+      const sp = m.read ? SPRITES.memory_item_b : SPRITES.memory_item;
+      drawSpriteCentered(ctx, sp, m.x * TILE, m.y * TILE + memBob, SCALE);
+    }
+  }
   const eFrame = Math.floor(state.animFrame / 18) % 2 === 0 ? 'a' : 'b';
   for (const en of state.enemies) {
-    const sp = SPRITES[`shadow_${eFrame}`];
+    const sp = SPRITES[`e_${en.kind}_${eFrame}`] || SPRITES[`e_regret_${eFrame}`];
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
     ctx.ellipse(en.px + TILE/2, en.py + TILE - 2, 6, 2, 0, 0, Math.PI * 2);
@@ -1170,7 +2021,7 @@ function drawBattle() {
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  const b = BIOMES[state.biome] || BIOMES.dawn;
+  const b = state.dayPalette || BIOMES.dawn;
   const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
   grad.addColorStop(0, b.f2); grad.addColorStop(0.6, b.f1); grad.addColorStop(1, b.fa);
   ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1178,13 +2029,28 @@ function drawBattle() {
   for (let i = 0; i < 6; i++) ctx.fillRect(0, canvas.height - 80 + i * 14, canvas.width, 2);
   if (battle && battle.enemy) {
     const eFrame = Math.floor(state.animFrame / 18) % 2 === 0 ? 'a' : 'b';
-    const sp = SPRITES[`shadow_${eFrame}`];
+    // 敵 kind に応じてスプライト切替
+    let sp;
+    if (battle.enemy.kind === 'angel') sp = SPRITES[`angel_${eFrame}`];
+    else if (battle.enemy.kind === 'death') sp = SPRITES[`death_${eFrame}`];
+    else if (battle.enemy.kind === 'past_self') sp = SPRITES[`past_self_${eFrame}`];
+    else if (battle.enemy.kind === 'angel_boss') sp = SPRITES[`angel_${eFrame}`];
+    else sp = SPRITES[`e_${battle.enemy.kind}_${eFrame}`] || SPRITES[`e_regret_${eFrame}`];
+
     if (sp) {
       const enemyScale = 6;
       const ew = sp[0].length * enemyScale;
       const ex = (canvas.width - ew) / 2;
       const shakeX = battle.shakeEnemy ? (Math.random() - 0.5) * 12 : 0;
       const ey = 40;
+      // 天使には後光
+      if (battle.enemy.kind === 'angel' || battle.enemy.kind === 'angel_boss') {
+        const halo = Math.sin(state.animFrame / 8) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(255, 240, 180, ${0.25 * halo})`;
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, ey + 50, 100 + halo * 20, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.beginPath();
       ctx.ellipse(canvas.width / 2, ey + sp.length * enemyScale - 4, 50, 8, 0, 0, Math.PI * 2);
@@ -1388,6 +2254,67 @@ function enemyTurn() {
 }
 
 // ============ BATTLE ============
+// ============ ボス戦 ============
+function startBossBattle(bossEnemy, onWin, onLose) {
+  state.inBattle = true;
+  battle = {
+    enemy: bossEnemy, enemyRef: bossEnemy,
+    showingMsg: false, waitingForInput: false,
+    shakeEnemy: false, enemyFading: null,
+    stunNextTurn: false, defending: false,
+    prevChapter: state.biome,
+    isBoss: true,
+    onWin: onWin,
+    onLose: onLose,
+  };
+  if (musicEnabled) playMusic('battle');
+  document.getElementById('stage').classList.add('in-battle');
+  document.querySelectorAll('.battle-ui').forEach(el => el.classList.add('active'));
+  document.getElementById('battleStats').style.display = 'grid';
+  updateBattleStats();
+  showBattleMsg(`${bossEnemy.name} が あらわれた!`, () => promptCommand());
+}
+
+function finishBossBattle() {
+  state.inBattle = false;
+  battle = null;
+  document.getElementById('stage').classList.remove('in-battle');
+  document.querySelectorAll('.battle-ui').forEach(el => el.classList.remove('active'));
+  document.getElementById('battleStats').style.display = 'none';
+  document.getElementById('battleMsg').style.display = 'none';
+  document.getElementById('battleCmd').style.display = 'none';
+  updateStats();
+}
+
+function triggerAngelBattle() {
+  log('天使が あなたを 見つめている。', 'epic');
+  if (musicEnabled) playMusic('battle');
+  inputLocked = true;
+  setTimeout(() => {
+    const angel = makeAngelBoss();
+    startBossBattle(angel, () => {
+      // 勝利: 才能のかけら入手、余命999
+      state.items.talent_shard = true;
+      state.life = 999;
+      state.vit = 100;
+      if (musicEnabled) sfxLevelUp();
+      showBattleMsg('「才能のかけら」を 手に入れた!\n\nあなたの 余命は 999日になった。\n体力も 完全に 回復した。', () => {
+        finishBossBattle();
+        setTimeout(() => {
+          log('天使は 光となり 消えた...', 'good');
+          log('あなたは 塔に 戻る。', 'dim');
+          setTimeout(() => {
+            state.fromHiddenRoute = false;
+            // Day6 から再開
+            loadDay(6);
+            inputLocked = false;
+          }, 2200);
+        }, 800);
+      });
+    }, null);
+  }, 1500);
+}
+
 function startBattle(enemy) {
   state.inBattle = true;
   battle = {
@@ -1507,28 +2434,45 @@ function playerRun() {
 
 function enemyAct() {
   if (!battle || battle.enemy.hp <= 0) { checkBattleEnd(); return; }
-  const dmg = battle.enemy.atk + Math.floor(Math.random() * 3);
-  const actualDmg = battle.defending ? Math.max(1, Math.floor(dmg / 2)) : dmg;
+
+  // ボスは actions からランダム選択
+  let actionType = 'attack';
+  if (battle.enemy.actions) {
+    actionType = battle.enemy.actions[Math.floor(Math.random() * battle.enemy.actions.length)];
+  }
+  let baseDmg = battle.enemy.atk + Math.floor(Math.random() * 3);
+  let actionText = `${battle.enemy.name}の こうげき!`;
+  if (actionType === 'sharp') {
+    baseDmg = Math.floor(baseDmg * 1.5);
+    actionText = `${battle.enemy.name}の するどい一撃!`;
+  } else if (actionType === 'judgment') {
+    baseDmg = Math.floor(baseDmg * 2);
+    actionText = `${battle.enemy.name}の さばきの光!`;
+  } else if (actionType === 'cry') {
+    baseDmg = Math.floor(baseDmg * 0.5);
+    actionText = `${battle.enemy.name}は しずかに ないた...\n胸が しめつけられる。`;
+  }
+  const actualDmg = battle.defending ? Math.max(1, Math.floor(baseDmg / 2)) : baseDmg;
   battle.defending = false;
   state.vit = Math.max(0, state.vit - actualDmg);
   flashDamage();
   if (musicEnabled) sfxHurt();
   updateBattleStats();
   if (state.vit <= 0) {
-    state.life -= 5; // 体力0で倒れたら余命も削れる
+    state.life -= 5;
     updateStats();
     if (state.life <= 0) {
-      showBattleMsg(`あなたは ${actualDmg}の ダメージ!\n体力が 尽きた…`, () => battleGameOver());
+      showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!\n体力が 尽きた…`, () => battleGameOver());
       return;
     }
-    showBattleMsg(`あなたは ${actualDmg}の ダメージ!\n体力が 尽きた。よめい -5日`, () => {
-      state.vit = 30; // 最低限の体力で復帰
+    showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!\n体力が 尽きた。よめい -5日`, () => {
+      state.vit = 30;
       updateBattleStats();
       promptCommand();
     });
     return;
   }
-  showBattleMsg(`${battle.enemy.name}の こうげき!\nあなたは ${actualDmg}の ダメージ!`, () => promptCommand());
+  showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!`, () => promptCommand());
 }
 
 function checkBattleEnd() {
@@ -1539,7 +2483,13 @@ function checkBattleEnd() {
       if (battle.enemyFading <= 0) {
         clearInterval(fadeInterval);
         battle.enemyFading = null;
-        endBattle('win');
+        // ボス戦か通常戦かで分岐
+        if (battle.isBoss && battle.onWin) {
+          const onWin = battle.onWin;
+          onWin();
+        } else {
+          endBattle('win');
+        }
       }
     }, 50);
   } else {
@@ -1552,16 +2502,44 @@ function endBattle(result) {
     state.killCount++;
     const expReward = 2 + Math.floor(state.day / 5);
     state.coin += expReward;
-    // 影を鎮めると 体力が少し戻り、まれに余命も戻る
     state.vit = Math.min(100, state.vit + 5);
     const lifeBonus = Math.random() < 0.4 ? 1 : 0;
     if (lifeBonus > 0) state.life += lifeBonus;
     if (musicEnabled) sfxVictory();
-    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward} ／ 体力 +5${lifeBonus > 0 ? '\nよめい +'+lifeBonus+'日' : ''}`, () => {
+
+    // 裏ルート: Day5 で 特殊敵を倒したらカウント
+    let secretMsg = '';
+    if (state.day === 5 && battle.enemyRef && battle.enemyRef.isSecret) {
+      state.secretKills++;
+      if (state.secretKills < 10) {
+        secretMsg = `\n（${state.secretKills} / 10）`;
+      } else if (state.secretKills === 10 && !state.hiddenStair) {
+        // 隠し階段を出現させる
+        secretMsg = '\n\n…奥に 光る階段が 現れた!';
+        spawnHiddenStair();
+      }
+    }
+
+    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward} ／ 体力 +5${lifeBonus > 0 ? '\nよめい +'+lifeBonus+'日' : ''}${secretMsg}`, () => {
       finishBattle();
     });
   } else {
     finishBattle();
+  }
+}
+
+function spawnHiddenStair() {
+  // Day5 マップの右下あたりに隠し階段を出現
+  // 既に階段や敵がいないマスを探す
+  for (let y = GRID_H - 2; y >= 1; y--) {
+    for (let x = GRID_W - 2; x >= 1; x--) {
+      if (state.map[y][x] !== 0) continue;
+      if (state.stair && state.stair.x === x && state.stair.y === y) continue;
+      if (state.enemies.some(e => e.x === x && e.y === y)) continue;
+      if (state.player.x === x && state.player.y === y) continue;
+      state.hiddenStair = { x, y };
+      return;
+    }
   }
 }
 
@@ -1606,8 +2584,48 @@ function tryMove(dx, dy) {
   const oldX = state.player.x, oldY = state.player.y;
   state.player.x = nx; state.player.y = ny;
   state.totalSteps++;
+
+  // === 裏ルート: Day5 で 5歩ごとに新モンスター出現 ===
+  if (state.day === 5 && !state.hiddenStair) {
+    state.secretSteps++;
+    if (state.secretSteps >= 5 && state.secretSpawned < 12) {
+      state.secretSteps = 0;
+      spawnSecretShadow();
+    }
+  }
+
   inputLocked = true;
   animateMove(state.player, oldX, oldY, nx, ny, MOVE_DURATION, () => {
+    // 思い出アイテムを踏んだ
+    if (state.memoryItems) {
+      const mem = state.memoryItems.find(m => m.x === nx && m.y === ny);
+      if (mem && !mem.read) {
+        mem.read = true;
+        log('― 思い出 ―', 'dim');
+        log(mem.text, 'good');
+      }
+    }
+    // 隠し階段（Day5裏ルート）→ Day0 へ
+    if (state.hiddenStair && state.hiddenStair.x === nx && state.hiddenStair.y === ny) {
+      inputLocked = true;
+      log('光る階段を 降りる...', 'good');
+      if (musicEnabled) sfxStair();
+      setTimeout(() => {
+        state.fromHiddenRoute = true;
+        loadDay(0);
+        inputLocked = false;
+      }, 1000);
+      return;
+    }
+    // 天使に隣接（Day0）→ 天使戦
+    if (state.angel) {
+      const ad = Math.abs(state.angel.x - nx) + Math.abs(state.angel.y - ny);
+      if (ad <= 1 && !state.eventDone) {
+        state.eventDone = true;
+        triggerAngelBattle();
+        return;
+      }
+    }
     // 階段到達 → イベント発火
     if (state.stair && state.stair.x === nx && state.stair.y === ny && !state.eventDone) {
       triggerEvent();
@@ -1686,6 +2704,21 @@ function applyChoice(ev, ch, idx) {
   if (e.unlock) state.unlocks[e.unlock] = true;
   if (e.special) state.specials[e.special] = true;
 
+  // === 裏ルート: アイテム連鎖 ===
+  let extraNarration = null;
+  // Day19 で 1番目（嘘を書く）+ 才能のかけら所持 → 汚れた心
+  if (state.day === 19 && idx === 0 && state.items.talent_shard) {
+    delete state.items.talent_shard;
+    state.items.tainted_heart = true;
+    extraNarration = '「才能のかけら」が 砕け、\n「汚れた心」が 体に 染み込んだ...';
+  }
+  // Day23 で 1番目（全力で戦う）+ 汚れた心所持 → 歴戦の勇気
+  if (state.day === 23 && idx === 0 && state.items.tainted_heart) {
+    delete state.items.tainted_heart;
+    state.items.veteran_courage = true;
+    extraNarration = '「汚れた心」が 解けて、\n「歴戦の勇気」へ 変わった!';
+  }
+
   // 理不尽処理
   if (ev.unfair) {
     state.unfairCount++;
@@ -1706,10 +2739,13 @@ function applyChoice(ev, ch, idx) {
   if (e.narration) {
     setTimeout(() => log(e.narration, 'epic'), 100);
   }
+  if (extraNarration) {
+    setTimeout(() => log(extraNarration, 'good'), e.narration ? 2400 : 200);
+  }
   setTimeout(() => {
     if (state.life <= 0) { gameOver(); return; }
     nextDay();
-  }, e.narration ? 2200 : 400);
+  }, (e.narration ? 2200 : 400) + (extraNarration ? 2200 : 0));
 }
 
 function showUnfairResult(unfair) {
@@ -1776,12 +2812,15 @@ function canStorytellerEnd() {
 function triggerEnding(choiceType) {
   closeEvent();
   if (choiceType === 'fight') {
+    // === 裏ルート: 歴戦の勇気所持なら 天使ボス戦 ===
+    if (state.items.veteran_courage) {
+      triggerFinalAngelBattle();
+      return;
+    }
     // 死神戦
     if (canStorytellerEnd()) {
-      // 真エンディング
       showEnding('storyteller');
     } else {
-      // 戦って敗北
       showEnding('defiant');
     }
   } else if (choiceType === 'accept') {
@@ -1791,6 +2830,60 @@ function triggerEnding(choiceType) {
   } else if (choiceType === 'observe') {
     showEnding('witness');
   }
+}
+
+// ============ 裏ルート: 最終戦シーケンス ============
+function triggerFinalAngelBattle() {
+  log('「歴戦の勇気」が 体の中で 燃え上がる。', 'epic');
+  log('死神が 振り返る。「お前は...」', 'warn');
+  setTimeout(() => {
+    log('死神の姿が 砕け、光となり、', 'warn');
+    log('堕ちた天使が 姿を現した!', 'warn');
+    if (musicEnabled) playMusic('battle');
+    setTimeout(() => {
+      const boss = makeAngelFinalBoss();
+      startBossBattle(boss, () => {
+        // 天使に勝利 → 自分が死神に
+        if (musicEnabled) sfxLevelUp();
+        showBattleMsg('天使は 砕け散った。\n\nあなたの 体が 黒く変わっていく...\n\nあなたは 死神に なった。', () => {
+          finishBossBattle();
+          setTimeout(() => triggerPastSelfBattle(), 2500);
+        });
+      });
+    }, 1800);
+  }, 1500);
+}
+
+function triggerPastSelfBattle() {
+  // 死神視点。過去の自分が登ってくる
+  log('塔の階段の音が 聞こえる。', 'epic');
+  log('誰かが 登ってくる...', 'dim');
+  setTimeout(() => {
+    log('それは 若き日の あなただった。', 'epic');
+    setTimeout(() => {
+      if (musicEnabled) playMusic('death');
+      setTimeout(() => {
+        const pastSelf = makePastSelf();
+        startBossBattle(pastSelf, () => {
+          // 過去の自分に勝利 → 真の最終エンディング
+          if (musicEnabled) sfxGameOver();
+          showBattleMsg('過去の自分が 倒れた。', () => {
+            finishBossBattle();
+            setTimeout(() => {
+              log('「死にたくない... 死にたくない...」', 'warn');
+              setTimeout(() => {
+                log('過去の自分は そう呟きながら', 'warn');
+                log('静かに 消えていった。', 'warn');
+                setTimeout(() => {
+                  showEnding('reaper');
+                }, 2500);
+              }, 2500);
+            }, 1500);
+          });
+        });
+      }, 2000);
+    }, 2000);
+  }, 1500);
 }
 
 function showEnding(kind) {
@@ -1818,6 +2911,10 @@ function showEnding(kind) {
       tag: 'TRUE ENDING', title: '語り継ぐ者', en: 'The Storyteller',
       body: '死神に対し、あなたは 出会ったすべての人々を 語り始める。<br>マコトの 最期の言葉を。<br>果たせなかった 約束を。<br>記憶のかけらを。<br><br>語り終えた時 死神は 静かに 頷き、消えた。<br>あなたも 消える。<br>だが あなたの語った物語は 塔の壁に 刻まれた。<br><br>「人は、二度死ぬ。だが、語られる限り、生き続ける」' + (state.unfairCount >= 3 ? '<br>「――たとえ、世界がそれを 許さなくとも」' : ''),
     },
+    reaper: {
+      tag: 'SECRET ENDING', title: '死神となりし者', en: 'The Reaper',
+      body: 'あなたは 塔の頂上に 一人で立っている。<br>手には 鎌。<br>影は 黒い。<br><br>過去の自分は 倒れた。<br>「死にたくない... 死にたくない...」<br>その声が まだ 耳に残っている。<br><br>あなたは 階段を 振り返る。<br>また 誰かが 登ってくる。<br>あなたが かつて そうであったように。<br><br>「お前は よく登ってきた」<br>「もう 終わりにしよう」<br><br>同じ言葉を 同じ手つきで 差し出す。<br>無限の階段の 一番上で。',
+    },
   };
   const e = endings[kind];
   const stat = `たどりついたDay ${state.day} ／ 理不尽 ${state.unfairCount}回通過<br>` +
@@ -1830,6 +2927,15 @@ function showEnding(kind) {
   document.getElementById('endStat').innerHTML = stat;
   document.getElementById('endModal').classList.remove('hidden');
   state.gameOver = true;
+
+  // 称号記録
+  let saveKey = kind;
+  if (kind === 'defiant' && state.unfairCount >= 3) saveKey = 'unbroken';
+  if (kind === 'witness' && state.unfairCount >= 3) saveKey = 'witnessth';
+  saveRecord(saveKey, {
+    day: state.day, fight: state.fight, accept: state.accept,
+    escape: state.escape, observe: state.observe, coin: state.coin,
+  });
 }
 
 function gameOver() {
@@ -1846,17 +2952,23 @@ function gameOver() {
       `<span class="gold-stat">闘志${state.fight} ／ 受容${state.accept} ／ 解放${state.escape} ／ 覚醒${state.observe}</span><br>` +
       `しずめた影 ${state.killCount} ／ 記憶 ${state.coin}`;
     document.getElementById('endModal').classList.remove('hidden');
+    saveRecord('unfinished', {
+      day: state.day, fight: state.fight, accept: state.accept,
+      escape: state.escape, observe: state.observe, coin: state.coin,
+    });
   }, 700);
 }
 
 function openMenu() {
-  // 簡易メニュー（今回は記憶辿りは未実装、状態表示のみ）
   const items = [];
   if (state.items.first_wound) items.push('最初の傷');
   if (state.items.liquor_left) items.push('飲み残しの酒');
   if (state.items.broken_promise) items.push('果たせなかった約束');
   if (state.items.last_words) items.push('最期の言葉');
   if (state.items.memory_fragment) items.push('記憶のかけら');
+  if (state.items.talent_shard) items.push('★才能のかけら');
+  if (state.items.tainted_heart) items.push('★汚れた心');
+  if (state.items.veteran_courage) items.push('★歴戦の勇気');
   const itemsStr = items.length ? items.join('、') : 'なし';
   log(`所持品: ${itemsStr}`, 'dim');
   log(`記憶 ${state.coin} ／ 体力 ${state.vit} ／ 余命 ${state.life}日`, 'dim');
@@ -1880,14 +2992,88 @@ function resetGame() {
 
 function startGame() {
   initAudio();
-  // ユーザー操作後に AudioContext を resume（自動再生制限対策）
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  unlockAudio();
   document.getElementById('titleScreen').classList.add('hidden');
   state = newState();
-  state.day = 0; // loadDay で 1 に上書きされるが、prevChapter検出用に
+  state.day = 0;
   loadDay(1);
   animLoop();
 }
+
+// ============ 称号記録 (localStorage) ============
+const RECORDS_KEY = 'memento_records_v1';
+const ENDING_INFO = {
+  defiant:    { name: '抗いし者', en: 'The Defiant', tag: 'Ending I' },
+  unbroken:   { name: '折られなかった者', en: 'The Unbroken', tag: 'Ending I+' },
+  embraced:   { name: '受け入れし者', en: 'The Embraced', tag: 'Ending II' },
+  wanderer:   { name: '駆け抜けし者', en: 'The Wanderer', tag: 'Ending III' },
+  witness:    { name: '見届けし者', en: 'The Witness', tag: 'Ending IV' },
+  witnessth:  { name: '理不尽を見届けし者', en: 'The Witness Through', tag: 'Ending IV+' },
+  storyteller:{ name: '語り継ぐ者', en: 'The Storyteller', tag: 'True Ending' },
+  reaper:     { name: '死神となりし者', en: 'The Reaper', tag: 'Secret Ending' },
+  unfinished: { name: '途上で逝きし者', en: 'The Unfinished', tag: 'Bad End' },
+};
+
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+
+function saveRecord(endingKey, extra = {}) {
+  const records = loadRecords();
+  const prev = records[endingKey] || { count: 0 };
+  records[endingKey] = {
+    count: (prev.count || 0) + 1,
+    lastDay: extra.day || 30,
+    lastDate: new Date().toISOString().slice(0, 10),
+    bestFight: Math.max(prev.bestFight || 0, extra.fight || 0),
+    bestAccept: Math.max(prev.bestAccept || 0, extra.accept || 0),
+    bestEscape: Math.max(prev.bestEscape || 0, extra.escape || 0),
+    bestObserve: Math.max(prev.bestObserve || 0, extra.observe || 0),
+    bestCoin: Math.max(prev.bestCoin || 0, extra.coin || 0),
+  };
+  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); } catch (e) {}
+}
+
+function showRecords() {
+  const records = loadRecords();
+  const body = document.getElementById('recordsBody');
+  const keys = Object.keys(ENDING_INFO);
+  const obtained = keys.filter(k => records[k]);
+  const html = [];
+  html.push(`<div style="color:var(--gold);text-align:center;margin-bottom:12px;font-size:12px;letter-spacing:0.2em;">獲得 ${obtained.length} / ${keys.length}</div>`);
+  for (const k of keys) {
+    const info = ENDING_INFO[k];
+    const rec = records[k];
+    if (rec) {
+      html.push(`<div style="border:1px solid #404050;padding:10px 12px;margin-bottom:6px;background:rgba(20,20,30,0.5);">
+        <div style="color:var(--gold);font-size:11px;letter-spacing:0.2em;">${info.tag}</div>
+        <div style="font-family:'Shippori Mincho',serif;font-size:16px;font-weight:600;margin:2px 0;">${info.name}</div>
+        <div style="color:#a0a0a0;font-size:11px;font-style:italic;">${info.en}</div>
+        <div style="color:#707080;font-size:10px;margin-top:4px;">獲得 ${rec.count}回 ／ Day ${rec.lastDay} ／ ${rec.lastDate}</div>
+      </div>`);
+    } else {
+      html.push(`<div style="border:1px solid #202030;padding:10px 12px;margin-bottom:6px;background:rgba(10,10,15,0.5);opacity:0.5;">
+        <div style="color:#404050;font-size:11px;letter-spacing:0.2em;">${info.tag}</div>
+        <div style="color:#404050;font-family:'Shippori Mincho',serif;font-size:16px;margin:2px 0;">???</div>
+        <div style="color:#303040;font-size:11px;font-style:italic;">未到達</div>
+      </div>`);
+    }
+  }
+  if (obtained.length === 0) {
+    html.push('<div style="color:#707080;text-align:center;padding:20px;">まだ どの結末にも 至っていない。</div>');
+  }
+  body.innerHTML = html.join('');
+  document.getElementById('recordsModal').classList.remove('hidden');
+}
+
+function closeRecords() {
+  document.getElementById('recordsModal').classList.add('hidden');
+}
+
+// グローバルに最初のタッチでaudio unlock
+document.addEventListener('touchstart', () => { if (audioCtx) unlockAudio(); }, { once: false, passive: true });
+document.addEventListener('click', () => { if (audioCtx) unlockAudio(); }, { once: false });
 
 function animLoop() {
   if (!state) return;
@@ -1935,18 +3121,83 @@ document.addEventListener('keydown', (e) => {
 
 let touchStart = null;
 document.getElementById('canvas').addEventListener('touchstart', (e) => {
+  e.preventDefault();
   touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-});
+}, { passive: false });
 document.getElementById('canvas').addEventListener('touchend', (e) => {
+  e.preventDefault();
   if (!touchStart || (state && state.inBattle)) { touchStart = null; return; }
   const dx = e.changedTouches[0].clientX - touchStart.x;
   const dy = e.changedTouches[0].clientY - touchStart.y;
+  // 30px以上のスワイプのみ反応（タップは無視）
   if (Math.abs(dx) > Math.abs(dy)) {
-    if (Math.abs(dx) > 20) tryMove(dx > 0 ? 1 : -1, 0);
+    if (Math.abs(dx) > 30) tryMove(dx > 0 ? 1 : -1, 0);
   } else {
-    if (Math.abs(dy) > 20) tryMove(0, dy > 0 ? 1 : -1);
+    if (Math.abs(dy) > 30) tryMove(0, dy > 0 ? 1 : -1);
   }
   touchStart = null;
+}, { passive: false });
+document.getElementById('canvas').addEventListener('touchmove', (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+// ============ Dパッド 長押し対応 ============
+let dpadHoldInterval = null;
+let dpadCurrentDir = null;
+const DPAD_INITIAL_DELAY = 200;
+const DPAD_REPEAT_DELAY = 130;
+
+function dpadAction(dir) {
+  if (dir === 'up') tryMove(0, -1);
+  else if (dir === 'down') tryMove(0, 1);
+  else if (dir === 'left') tryMove(-1, 0);
+  else if (dir === 'right') tryMove(1, 0);
+  else if (dir === 'center') openMenu();
+}
+
+function dpadStart(dir) {
+  if (dpadCurrentDir === dir) return;
+  dpadStop();
+  dpadCurrentDir = dir;
+  dpadAction(dir);
+  if (dir === 'center') return; // 記憶ボタンは1回だけ
+  // 初回押下後 DPAD_INITIAL_DELAY 待って、その後 DPAD_REPEAT_DELAY ごとに連続発火
+  dpadHoldInterval = setTimeout(function repeat() {
+    if (dpadCurrentDir !== dir) return;
+    dpadAction(dir);
+    dpadHoldInterval = setTimeout(repeat, DPAD_REPEAT_DELAY);
+  }, DPAD_INITIAL_DELAY);
+}
+
+function dpadStop() {
+  if (dpadHoldInterval) clearTimeout(dpadHoldInterval);
+  dpadHoldInterval = null;
+  dpadCurrentDir = null;
+}
+
+// Dパッドにイベント登録
+document.querySelectorAll('#dpad button').forEach(btn => {
+  const dir = btn.dataset.dir;
+  btn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (audioCtx) unlockAudio();
+    dpadStart(dir);
+  }, { passive: false });
+  btn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    dpadStop();
+  }, { passive: false });
+  btn.addEventListener('touchcancel', (e) => {
+    e.preventDefault();
+    dpadStop();
+  }, { passive: false });
+  // PC用 (マウス)
+  btn.addEventListener('mousedown', (e) => {
+    if ('ontouchstart' in window) return; // モバイルは touch のみ
+    dpadStart(dir);
+  });
+  btn.addEventListener('mouseup', () => { if (!('ontouchstart' in window)) dpadStop(); });
+  btn.addEventListener('mouseleave', () => { if (!('ontouchstart' in window)) dpadStop(); });
 });
 </script>
 
