@@ -1723,7 +1723,10 @@ function loadDay(day) {
     log(`Day ${day}. ${chapter.name}の階。`, 'epic');
   }
   if (state.day === 1) log('階段を上れ。終わりは そう遠くない。', 'dim');
-  if (state.day === 5) log('（何かが 起きそうな 気配...）', 'dim');
+  if (state.day === 5) {
+    log('（このフロアは 何かが違う...）', 'warn');
+    log('（歩いていると 影が 湧いてくる）', 'dim');
+  }
 }
 
 function parseFixedMap(tpl, day) {
@@ -1831,18 +1834,21 @@ function spawnSecretShadow() {
       if (state.map[y][x] !== 0) continue;
       if (state.enemies.some(e => e.x === x && e.y === y)) continue;
       if (state.player.x === x && state.player.y === y) continue;
+      if (state.stair && state.stair.x === x && state.stair.y === y) continue;
       const d = Math.abs(x - state.player.x) + Math.abs(y - state.player.y);
-      if (d < 4) continue;
+      if (d < 3) continue; // 距離制約を 4 → 3 に緩和
       candidates.push({ x, y, d });
     }
   }
-  if (candidates.length === 0) return;
+  if (candidates.length === 0) {
+    log('(影は現れなかった... 場所がない)', 'dim');
+    return;
+  }
   const pos = candidates[Math.floor(Math.random() * candidates.length)];
-  // 弱めの敵をランダム選択
   const kinds = ['regret', 'attach', 'fear', 'bore', 'lonely'];
   const kind = kinds[Math.floor(Math.random() * kinds.length)];
   const enemy = makeFixedShadow(pos, 5, kind);
-  enemy.isSecret = true; // 裏ルート判別用フラグ
+  enemy.isSecret = true;
   state.enemies.push(enemy);
   state.secretSpawned++;
   log(`どこからともなく ${enemy.name}が 現れた...`, 'warn');
