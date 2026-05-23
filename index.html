@@ -1866,23 +1866,24 @@ function spawnSecretShadow() {
 // 裏ルート専用の強化された影
 function makeSecretShadow(pos, kind) {
   const t = SHADOW_TYPES[kind];
-  // 通常より大幅に強化（プレイヤーが10匹倒すと相当ダメージを受ける設計）
+  // 通常より強いが「10匹倒すとギリギリ」のバランス
+  // プレイヤー攻撃力 ≈ 14ダメ、防御2、敵1〜2発で倒せて、敵の攻撃も1〜2発耐えるくらい
   const baseStats = {
-    regret:  { hp: 35, atk: 14 },
-    attach:  { hp: 45, atk: 12 },
-    fear:    { hp: 28, atk: 18 },
-    bore:    { hp: 55, atk: 11 },
-    lonely:  { hp: 38, atk: 15 },
+    regret:  { hp: 18, atk: 6 },
+    attach:  { hp: 22, atk: 5 },
+    fear:    { hp: 14, atk: 8 },
+    bore:    { hp: 28, atk: 5 },
+    lonely:  { hp: 20, atk: 7 },
   };
   const s = baseStats[kind];
   return {
     ...pos, kind, name: t.name, ai: t.ai, attackType: t.attackType,
     hp: s.hp, maxHp: s.hp,
-    atk: s.atk, def: 4,
+    atk: s.atk, def: 2,
     sight: t.ai === 'teleport' ? 99 : t.ai === 'fast' ? 9 : t.ai === 'wander' ? 4 : 6,
     px: pos.x * TILE, py: pos.y * TILE,
     teleportCooldown: 0,
-    actions: ['attack', 'attack', 'sharp', 'sharp'],
+    actions: ['attack', 'attack', 'attack', 'sharp'],
   };
 }
 
