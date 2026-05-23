@@ -180,6 +180,7 @@
     <div class="status-cell"><span class="status-label">よめい</span><span class="status-value" id="lifeDisplay">30日</span></div>
     <div class="status-cell"><span class="status-label">たいりょく</span><span class="status-value vital" id="vitDisplay">100</span><div class="bar-back"><div class="bar-fill" id="vitBar" style="width:100%"></div></div></div>
     <div class="status-cell"><span class="status-label">きおく</span><span class="status-value coin" id="coinDisplay">0</span></div>
+    <div class="status-cell"><span class="status-label">ねんれい</span><span class="status-value" id="ageDisplay">18歳</span></div>
     <div class="status-cell"><span class="status-label">Day</span><span class="status-value gold" id="floorDisplay">1 / 30</span></div>
   </div>
 
@@ -938,6 +939,16 @@ function newState() {
     memoryItems: [],
     pastSelfDefeated: false,
     fromHiddenRoute: false,
+    // 年齢システム
+    age: 18,           // 開始年齢
+    exp: 0,            // 経験値
+    expToNext: 6,      // 次の年齢までに必要な経験値
+    // 武器システム（最初は「勇気の剣」のみ）
+    weapons: ['courage_sword'],   // 装備中 (最大2つ)
+    ownedWeapons: { courage_sword: true },  // 所持武器
+    currentWeapon: 'courage_sword',
+    // 状態異常
+    statuses: {},      // { responsibility: true, ... }
   };
 }
 
@@ -1000,6 +1011,12 @@ const SPRITES = {
   past_self_b: ["................","....KKKKKKKK....","...KbbbbbbbbK...","..KbwwwwwwwwbK..","..KbwwwwwwwwwK..","..KKKKKKKKKKKK..","..KnnssssssnnK..","..KnsskkssksskK.","..KnssssssssskK.","..KnsssssssssnK.","...KKKKKKKKK....","..KKKKKKKKKKKK..","..KKrrrrrrrrKK..","..KKKKKKKKKKKK..","....KKK.KnnK....","....KKK..KKK...."],
   // 隠し階段（金色っぽい）
   hidden_stair: ["................","................","KyyyyyyyyyyyyyyK","KyYYYYYYYYYYYYyK","KyyyyyyyyyyyyyYy","KKKKKKKKKKKKKKyY","KyYYYYYYYYYYYKyY","KyyyyyyyyyyyyKyY","KKKKKKKKKKKKyKyY","KyYYYYYYYYYyyKyY","KyyyyyyyyyyKyKyY","KKKKKKKKKKyyKyyY","KyYYYYYYYyyKyKyY","KyyyyyyyyKyyKyyY","KKKKKKKKyyKyKyyY","KyYYYYYyyKyyKyyY"],
+  // 中ボス: 比較の化身（紫）
+  e_comparison_a: ["................","....KKKKKKKK....","...KppppppppK...","..KppPPPPPPppK..","..KpwkwPPwkwpK..","..KpwkwPPwkwpK..","..KpppPPPPpppK..","..KpppPPPPpppK..","..KpKKpppKKppK..","..KppppppppppK..",".KpPPPPPPPPPpK..","KppppMpppMppppK.","KKpppppppppppKK.","..KppppppppppK..","....KKKKKKKK....","................"],
+  e_comparison_b: ["................","....KKKKKKKK....","...KppppppppK...","..KppPPPPPPppK..","..KpwkwPPwkwpK..","..KpwkkPPkkwpK..","..KpppPPPPpppK..","..KpppPPPPpppK..","..KppppppppppK..","..KppKKKKKKppK..",".KpPPPPPPPPPpK..","KppppMpppMppppK.","KKpppppppppppKK.","..KKpppppppKK...","....KKKKKKKK....","................"],
+  // 中ボス: 成果執着体（金属ゴーレム）
+  e_obsession_a: ["......KKKK......","....KKLLLLKK....","...KLLLLLLLLK...","..KLLwwLLwwLLK..","..KLLwkLLwkLLK..","..KLLLLLLLLLLK..","..KLLLPPPPLLLK..",".KKLLLLLLLLLLKK.","KLLLLLLLLLLLLLLK","KLKLKLKLKLKLKLKK","KLLLLLLLLLLLLLLK",".KLLLLLLLLLLLLK.","..KLLLPPLLLPPK..","..KLLLPPLLLPPK..","..KKKKKKKKKKKK..","....KKKKKKKK...."],
+  e_obsession_b: ["......KKKK......","....KKLLLLKK....","...KLLLLLLLLK...","..KLLwwLLwwLLK..","..KLLwkLLwkLLK..","..KLLLLLLLLLLK..","..KLLLPPPPLLLK..",".KKLLLLLLLLLLKK.","KLLLLLLLLLLLLLLK","KKLKLKLKLKLKLKLK","KLLLLLLLLLLLLLLK",".KLLLLLLLLLLLLK.","..KLLLPPLLLPPK..","..KKKKKKKKKKKK..","....KKKKKKKK....","......KKKK......"],
 };
 
 // 章ごとのバイオーム
@@ -1134,119 +1151,119 @@ const FIXED_MAPS = {
   "#........#..#..........#",
   "#........####..........#",
   "#......................#",
-  "#####.............######",
-  "#...#.............#....#",
-  "#...####....#######....#",
-  "#......#....#.....>....#",
-  "#......#....#..........#",
+  "#####..................#",
+  "#...#..................#",
+  "#...####...............#",
+  "#......................#",
+  "#..................>...#",
   "########################",
 ],
 3: [
   "########################",
-  "#@..#..................#",
-  "#...#.#####.#####......#",
-  "#...#.#...#.#...#......#",
-  "#...#.#.a.#.#.b.#......#",
+  "#@.....................#",
+  "#.....#####.#####......#",
+  "#.....#...#.#...#......#",
+  "#.....#.a.#.#.b.#......#",
   "#.....#...#.#...#......#",
   "#.....#####.#####......#",
-  "######..................#",
-  "#....#..####............#",
-  "#....#..#..#............#",
-  "#.1..#..#..#............#",
-  "#....#..#..#......######",
-  "#....#..####......#....#",
-  "#....#............#.>..#",
-  "#....#............#....#",
+  "#......................#",
+  "#......####............#",
+  "#......#..#............#",
+  "#..1...#..#............#",
+  "#......#..#............#",
+  "#......####............#",
+  "#..................>...#",
+  "#......................#",
   "########################",
 ],
 4: [
   "########################",
   "#@.....................#",
+  "#......................#",
   "#..#################...#",
   "#..#...............#...#",
   "#..#.a...........b.#...#",
   "#..#...............#...#",
-  "#..#####.#####.#####...#",
-  "#......#.#...#.#.......#",
-  "#......#.#.1.#.#.......#",
-  "#......#.#...#.#.......#",
-  "#......#.#####.#.......#",
-  "#......###...###.......#",
-  "#........#...#.........#",
-  "#........#.>.#.........#",
-  "#........#####.........#",
+  "#..#################...#",
+  "#......................#",
+  "#............1.........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#..................>...#",
   "########################",
 ],
 5: [
   "########################",
-  "#@..........#..........#",
-  "#...........#..........#",
-  "#....a......#......b...#",
-  "#...........#..........#",
-  "#...........#..........#",
-  "#####.#######.######.###",
-  "#.....#.....#.#......#.#",
-  "#.....#.....#.#......#.#",
-  "#.....#.....#.#......#.#",
-  "#####.########.######.##",
-  "#....................#.#",
-  "#....................#.#",
-  "#.................c..#.#",
-  "#....................>.#",
+  "#@.....................#",
+  "#......................#",
+  "#....a..........b......#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#.................c....#",
+  "#...................>..#",
   "########################",
 ],
 6: [
   "########################",
-  "#@...####..............#",
-  "#....#..#.....a........#",
-  "#....#..#..............#",
-  "#....####.....######...#",
-  "#.............#....#...#",
-  "#......1......#.b..#...#",
-  "#.............#....#...#",
-  "######........######...#",
-  "#....#.................#",
-  "#....#...........######",
-  "#.c..#...........#....#",
-  "#....#.....2.....#.>..#",
-  "#....#...........#....#",
-  "#....#...........#....#",
+  "#@.....................#",
+  "#.............a........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......1...............#",
+  "#...............b......#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#.c....................#",
+  "#...........2......>...#",
+  "#......................#",
+  "#......................#",
   "########################",
 ],
 7: [
   "########################",
   "#@.....................#",
-  "#......#######.........#",
-  "#......#.....#.........#",
-  "#......#..a..#.........#",
-  "#......#.....#.........#",
-  "#......##.#.##.........#",
-  "#.........#............#",
-  "#.........#............#",
-  "######....#....######..#",
-  "#....#....#....#....#..#",
-  "#.>..#....#....#.b..#..#",
-  "#....#....#....#....#..#",
-  "######....#....######..#",
-  "#.........#............#",
+  "#......................#",
+  "#......######..........#",
+  "#......#....#..........#",
+  "#......#.a..#..........#",
+  "#......######..........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#..................b...#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
   "########################",
 ],
 8: [
   "########################",
   "#@.....................#",
-  "#..####################",
+  "#......................#",
+  "#..#################...#",
   "#..#a..............#...#",
   "#..#...............#...#",
-  "#..#...............#...#",
-  "#..#####.....#######...#",
-  "#......#.....#.........#",
-  "#......#..2..#.........#",
-  "#......#.....#.........#",
-  "#......#######.........#",
-  "######.................#",
-  "#....#.............b...#",
-  "#.>..#.................#",
-  "#....#.................#",
+  "#..#################...#",
+  "#......................#",
+  "#............2.........#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#..................b...#",
+  "#......................#",
+  "#...................>..#",
   "########################",
 ],
 9: [
@@ -1288,37 +1305,37 @@ const FIXED_MAPS = {
 11: [
   "########################",
   "#@.....................#",
-  "#..######..######..####",
-  "#..#a...#..#....#..#..#",
-  "#..#....#..#.b..#..#c.#",
-  "#..#....#..#....#..#..#",
-  "#..####.#..#.####..####",
-  "#......##..##..........#",
   "#......................#",
-  "#######...........######",
-  "#.....#.....1.....#....#",
-  "#.....#.....2.....#....#",
-  "#.....#...........#.>..#",
-  "#.....#...........#....#",
-  "#.....#...........#....#",
+  "#...a........b........c#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#............1.........#",
+  "#............2.........#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
   "########################",
 ],
 12: [
   "########################",
-  "#@..........#.........>#",
-  "#...........#..........#",
-  "#...........#..........#",
-  "#.....a.....#.....b....#",
-  "#...........#..........#",
-  "############.###########",
+  "#@.....................#",
   "#......................#",
   "#......................#",
-  "#.....##############...#",
-  "#.....#............#...#",
-  "#.....#.....c......#...#",
-  "#.....#............#...#",
-  "#.....##############...#",
+  "#.....a...........b....#",
   "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#............c.........#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
   "########################",
 ],
 13: [
@@ -1367,11 +1384,11 @@ const FIXED_MAPS = {
   "#..####.....####.......#",
   "#......................#",
   "#......................#",
-  "#######........#########",
-  "#.....#....1...#.......#",
-  "#.....#....2...#.......#",
-  "#.....#........#.......#",
-  "#.....##########.......#",
+  "#......................#",
+  "#..........1...........#",
+  "#..........2...........#",
+  "#......................#",
+  "#......................#",
   "#...................>..#",
   "########################",
 ],
@@ -1449,20 +1466,20 @@ const FIXED_MAPS = {
 ],
 20: [
   "########################",
-  "#@..........#.........>#",
-  "#...........#..........#",
-  "#...........#..........#",
-  "#.....a.....#.....b....#",
-  "#...........#..........#",
-  "############.###########",
+  "#@.....................#",
   "#......................#",
   "#......................#",
-  "#.....##############...#",
-  "#.....#............#...#",
-  "#.....#.....c......#...#",
-  "#.....#............#...#",
-  "#.....##############...#",
+  "#.....a...........b....#",
   "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#......................#",
+  "#............c.........#",
+  "#......................#",
+  "#......................#",
+  "#...................>..#",
   "########################",
 ],
 21: [
@@ -1476,10 +1493,10 @@ const FIXED_MAPS = {
   "#......................#",
   "#............1.........#",
   "#......................#",
-  "######........##########",
-  "#....#....2...#........#",
-  "#....#........#.....b..#",
-  "#....##########........#",
+  "#......................#",
+  "#..........2...........#",
+  "#...................b..#",
+  "#......................#",
   "#...................>..#",
   "########################",
 ],
@@ -1723,10 +1740,6 @@ function loadDay(day) {
     log(`Day ${day}. ${chapter.name}の階。`, 'epic');
   }
   if (state.day === 1) log('階段を上れ。終わりは そう遠くない。', 'dim');
-  if (state.day === 5) {
-    log('（このフロアは 何かが違う...）', 'warn');
-    log('（歩いていると 影が 湧いてくる）', 'dim');
-  }
 }
 
 function parseFixedMap(tpl, day) {
@@ -1780,7 +1793,7 @@ function makeFixedShadow(pos, day, kind) {
   const s = baseStats[kind];
   const hp = s.hp + lvBoost * 4;
   return {
-    ...pos, kind, name: t.name, ai: t.ai,
+    ...pos, kind, name: t.name, ai: t.ai, attackType: t.attackType,
     hp, maxHp: hp, atk: s.atk + Math.floor(lvBoost * 0.8), def: Math.floor(lvBoost / 2),
     sight: t.ai === 'teleport' ? 99 : t.ai === 'fast' ? 9 : t.ai === 'wander' ? 4 : 6,
     px: pos.x * TILE, py: pos.y * TILE,
@@ -1827,7 +1840,6 @@ function makePastSelf() {
 
 // 裏ルート: Day5 の特殊スポーン
 function spawnSecretShadow() {
-  // プレイヤーから距離のある空きマスを探す
   const candidates = [];
   for (let y = 1; y < GRID_H - 1; y++) {
     for (let x = 1; x < GRID_W - 1; x++) {
@@ -1836,25 +1848,42 @@ function spawnSecretShadow() {
       if (state.player.x === x && state.player.y === y) continue;
       if (state.stair && state.stair.x === x && state.stair.y === y) continue;
       const d = Math.abs(x - state.player.x) + Math.abs(y - state.player.y);
-      if (d < 3) continue; // 距離制約を 4 → 3 に緩和
+      if (d < 3) continue;
       candidates.push({ x, y, d });
     }
   }
-  if (candidates.length === 0) {
-    log('(影は現れなかった... 場所がない)', 'dim');
-    return;
-  }
+  if (candidates.length === 0) return;
   const pos = candidates[Math.floor(Math.random() * candidates.length)];
   const kinds = ['regret', 'attach', 'fear', 'bore', 'lonely'];
   const kind = kinds[Math.floor(Math.random() * kinds.length)];
-  const enemy = makeFixedShadow(pos, 5, kind);
+  const enemy = makeSecretShadow(pos, kind);
   enemy.isSecret = true;
   state.enemies.push(enemy);
   state.secretSpawned++;
   log(`どこからともなく ${enemy.name}が 現れた...`, 'warn');
-  if (state.secretSpawned === 1) {
-    log('（10匹 倒すと 何かが変わるかもしれない）', 'dim');
-  }
+}
+
+// 裏ルート専用の強化された影
+function makeSecretShadow(pos, kind) {
+  const t = SHADOW_TYPES[kind];
+  // 通常より大幅に強化（プレイヤーが10匹倒すと相当ダメージを受ける設計）
+  const baseStats = {
+    regret:  { hp: 35, atk: 14 },
+    attach:  { hp: 45, atk: 12 },
+    fear:    { hp: 28, atk: 18 },
+    bore:    { hp: 55, atk: 11 },
+    lonely:  { hp: 38, atk: 15 },
+  };
+  const s = baseStats[kind];
+  return {
+    ...pos, kind, name: t.name, ai: t.ai, attackType: t.attackType,
+    hp: s.hp, maxHp: s.hp,
+    atk: s.atk, def: 4,
+    sight: t.ai === 'teleport' ? 99 : t.ai === 'fast' ? 9 : t.ai === 'wander' ? 4 : 6,
+    px: pos.x * TILE, py: pos.y * TILE,
+    teleportCooldown: 0,
+    actions: ['attack', 'attack', 'sharp', 'sharp'],
+  };
 }
 
 function loadDeathFloor() {
@@ -1874,12 +1903,70 @@ function loadDeathFloor() {
 
 // ============ SHADOW (敵) ============
 const SHADOW_TYPES = {
-  regret:  { name: 'こうかい',     ai: 'slow' },
-  attach:  { name: 'しゅうちゃく', ai: 'chase' },
-  fear:    { name: 'きょうふ',     ai: 'fast' },
-  bore:    { name: 'たいくつ',     ai: 'wander' },
-  lonely:  { name: 'こどく',       ai: 'teleport' },
+  // 接触型: シンプルな物理攻撃
+  regret:  { name: 'こうかい',     ai: 'slow',     attackType: 'contact',  desc: '触れると 後悔の念で 体が重くなる' },
+  // 追尾型: 執拗に追う
+  attach:  { name: 'しゅうちゃく', ai: 'chase',    attackType: 'pursuit',  desc: '振り払えない 執着の影' },
+  // 遠距離型: 鋭く一撃
+  fear:    { name: 'きょうふ',     ai: 'fast',     attackType: 'ranged',   desc: '心の遠くから 鋭く刺してくる' },
+  // 広範囲型: 周囲全体に重い一撃
+  bore:    { name: 'たいくつ',     ai: 'wander',   attackType: 'area',     desc: 'じわじわと 気力を奪う' },
+  // 汚染型: 状態異常付与
+  lonely:  { name: 'こどく',       ai: 'teleport', attackType: 'taint',    desc: '触れた者に 「責任感」を 植え付ける' },
 };
+
+// ============ 武器システム ============
+const WEAPONS = {
+  courage_sword: {
+    name: '勇気の剣', en: 'Sword of Courage', icon: '⚔',
+    type: 'melee', power: 1.0,
+    desc: 'バランス型の剣。素直に強い。',
+    effect: 'バランス',
+  },
+  anger_hammer: {
+    name: '怒りの鉄槌', en: 'Hammer of Rage', icon: '🔨',
+    type: 'melee', power: 1.8,
+    cost: { vit: 8 }, // HP消費
+    desc: '超火力。だが 体力を 削る。',
+    effect: '超火力 (体力-8)',
+  },
+  sorrow_bow: {
+    name: '悲しみの弓', en: 'Bow of Sorrow', icon: '🏹',
+    type: 'ranged', power: 0.7,
+    extraEffect: 'slow_bleed', // 継続ダメ + スロー
+    desc: '遠くから 心に深く刺さる。',
+    effect: '継続ダメ＋スロー',
+  },
+  obsession_chain: {
+    name: '執着の鎖', en: 'Chains of Obsession', icon: '⛓',
+    type: 'area', power: 0.6,
+    extraEffect: 'multi_hit', // 全体3回ヒット
+    desc: '周囲を回転し 雑魚を なぎ払う。',
+    effect: '3回ヒット',
+  },
+  oblivion_dagger: {
+    name: '忘却の短剣', en: 'Dagger of Oblivion', icon: '🗡',
+    type: 'melee', power: 0.9,
+    extraEffect: 'free_dodge', // 1ターン回避自動成功
+    desc: 'ヒット＆アウェイ。 素早く 抜け出す。',
+    effect: '使用後 1ターン無敵',
+  },
+  hope_lantern: {
+    name: '希望の灯', en: 'Lantern of Hope', icon: '✨',
+    type: 'heal', power: 0,
+    extraEffect: 'heal_status', // HP回復 + 状態異常解除
+    desc: '攻撃せず、 体力と心を 癒す。',
+    effect: '体力+30 状態異常解除',
+  },
+};
+
+// 武器が手に入るタイミング (Dayイベントで配布)
+// courage_sword: 開始時から所持
+// anger_hammer: Day 8 で入手 (比較/競争の章)
+// sorrow_bow: Day 15 で入手 (喪失/挫折)
+// obsession_chain: Day 18 で入手 (執着)
+// oblivion_dagger: Day 22 で入手 (忘却)
+// hope_lantern: Day 25 で入手 (光)
 
 function makeShadow(pos, day) {
   // 階層に応じて影が強くなる
@@ -2041,6 +2128,8 @@ function drawBattle() {
     else if (battle.enemy.kind === 'death') sp = SPRITES[`death_${eFrame}`];
     else if (battle.enemy.kind === 'past_self') sp = SPRITES[`past_self_${eFrame}`];
     else if (battle.enemy.kind === 'angel_boss') sp = SPRITES[`angel_${eFrame}`];
+    else if (battle.enemy.kind === 'comparison') sp = SPRITES[`e_comparison_${eFrame}`];
+    else if (battle.enemy.kind === 'obsession') sp = SPRITES[`e_obsession_${eFrame}`];
     else sp = SPRITES[`e_${battle.enemy.kind}_${eFrame}`] || SPRITES[`e_regret_${eFrame}`];
 
     if (sp) {
@@ -2126,6 +2215,68 @@ function processLog() {
 }
 
 // ============ STATS UI ============
+// ============ 年齢システム ============
+// プレイヤーの年齢による能力倍率
+// 18-29: 若年期 - 物理↑回避↑
+// 30-49: 壮年期 - バランス
+// 50+:   老年期 - 魔法↑観測↑
+function getAgeStats() {
+  const age = state.age;
+  if (age < 30) {
+    // 若年期
+    return {
+      physicalMul: 1.3,   // 物理攻撃ボーナス
+      magicMul: 0.8,      // 魔法ボーナス
+      dodgeBonus: 0.20,   // 逃げ成功率ボーナス +20%
+      criticalMul: 1.2,   // クリティカル倍率
+      stage: '若年',
+    };
+  } else if (age < 50) {
+    return {
+      physicalMul: 1.0,
+      magicMul: 1.0,
+      dodgeBonus: 0.0,
+      criticalMul: 1.0,
+      stage: '壮年',
+    };
+  } else {
+    // 老年期
+    return {
+      physicalMul: 0.75,
+      magicMul: 1.5,
+      dodgeBonus: -0.15,
+      criticalMul: 0.9,
+      stage: '老年',
+    };
+  }
+}
+
+// 経験値を加算 → 年齢UP判定
+function gainExp(amount) {
+  state.exp += amount;
+  while (state.exp >= state.expToNext && state.age < 99) {
+    state.exp -= state.expToNext;
+    state.age++;
+    state.expToNext = 6 + Math.floor(state.age / 5); // だんだん必要量増
+    onAgeUp();
+  }
+}
+
+function onAgeUp() {
+  if (musicEnabled) sfxLevelUp();
+  log(`―― あなたは ${state.age}歳になった ――`, 'epic');
+  // ステージが変わるタイミングで通知
+  if (state.age === 30) {
+    log('若さは過ぎ去った。壮年期に入る。', 'warn');
+    log('物理攻撃力 -23% / 回避 -20%', 'dim');
+  } else if (state.age === 50) {
+    log('体は重くなり、心は澄んでいく。', 'warn');
+    log('物理 -25% / 魔法 +50% / 観測の力 強化', 'dim');
+  } else if (state.age === 70) {
+    log('もう、長くはないのかもしれない。', 'warn');
+  }
+}
+
 function updateStats() {
   if (!state) return;
   const life = Math.max(0, state.life);
@@ -2136,6 +2287,9 @@ function updateStats() {
   document.getElementById('vitBar').style.width = `${Math.max(0, state.vit)}%`;
   document.getElementById('coinDisplay').textContent = `${state.coin}`;
   document.getElementById('floorDisplay').textContent = `${state.day} / 30`;
+  // 年齢
+  const ageEl = document.getElementById('ageDisplay');
+  if (ageEl) ageEl.textContent = `${state.age}歳`;
 }
 
 function flashDamage() {
@@ -2384,24 +2538,123 @@ function highlightCmd(idx) {
 
 function selectCmd(cmd) {
   if (!battle || !battle.waitingForInput) return;
+  if (cmd === 'attack') {
+    // 装備武器が1個なら即攻撃、2個なら武器選択
+    if (state.weapons.length <= 1) {
+      battle.waitingForInput = false;
+      document.getElementById('battleCmd').style.display = 'none';
+      state.currentWeapon = state.weapons[0] || 'courage_sword';
+      playerAttack();
+    } else {
+      showWeaponPicker();
+    }
+    return;
+  }
   battle.waitingForInput = false;
   document.getElementById('battleCmd').style.display = 'none';
-  if (cmd === 'attack') playerAttack();
-  else if (cmd === 'spell') playerSpell();
+  if (cmd === 'spell') playerSpell();
   else if (cmd === 'defend') playerDefend();
   else if (cmd === 'run') playerRun();
 }
 
+// 武器選択ピッカー（2種装備時）
+function showWeaponPicker() {
+  const cmd = document.getElementById('battleCmd');
+  cmd.style.display = 'grid';
+  cmd.innerHTML = '';
+  for (const wKey of state.weapons) {
+    const w = WEAPONS[wKey];
+    const btn = document.createElement('button');
+    btn.className = 'cmd-btn';
+    btn.innerHTML = `${w.icon} ${w.name}<span class="cost">${w.effect}</span>`;
+    btn.onclick = () => {
+      state.currentWeapon = wKey;
+      battle.waitingForInput = false;
+      cmd.style.display = 'none';
+      restoreCmdButtons();
+      playerAttack();
+    };
+    cmd.appendChild(btn);
+  }
+  // 戻るボタン
+  const back = document.createElement('button');
+  back.className = 'cmd-btn';
+  back.textContent = 'もどる';
+  back.onclick = () => {
+    cmd.style.display = 'grid';
+    restoreCmdButtons();
+    promptCommand();
+  };
+  cmd.appendChild(back);
+}
+
+function restoreCmdButtons() {
+  const cmd = document.getElementById('battleCmd');
+  cmd.innerHTML = `
+    <button class="cmd-btn" data-cmd="attack" onclick="selectCmd('attack')">たたかう</button>
+    <button class="cmd-btn" data-cmd="spell" onclick="selectCmd('spell')">じゅもん<span class="cost">よめい -2</span></button>
+    <button class="cmd-btn" data-cmd="defend" onclick="selectCmd('defend')">ぼうぎょ</button>
+    <button class="cmd-btn" data-cmd="run" onclick="selectCmd('run')">にげる</button>
+  `;
+}
+
 function playerAttack() {
+  const wKey = state.currentWeapon || 'courage_sword';
+  const weapon = WEAPONS[wKey];
+  const ageS = getAgeStats();
   const baseAtk = Math.floor(state.vit * 0.06) + 5;
-  const dmg = Math.max(1, baseAtk + Math.floor(Math.random()*3) - 1 - battle.enemy.def);
+  let cost = 1; // 基本体力消費
+
+  // 「希望の灯」は攻撃せず回復
+  if (weapon.extraEffect === 'heal_status') {
+    state.vit = Math.min(100, state.vit + 30);
+    let cleared = '';
+    if (Object.keys(state.statuses).length > 0) {
+      state.statuses = {};
+      cleared = '\n状態異常 解除!';
+    }
+    showBattleMsg(`${weapon.icon} ${weapon.name}を かかげる。\n体力 +30!${cleared}`, () => {
+      updateBattleStats();
+      enemyAct();
+    });
+    return;
+  }
+
+  // 「怒りの鉄槌」は体力消費
+  if (weapon.cost && weapon.cost.vit) cost += weapon.cost.vit;
+
+  // ベースダメージ計算 (武器のpower × 年齢の物理倍率)
+  let dmg = Math.max(1, Math.floor(baseAtk * weapon.power * ageS.physicalMul) + Math.floor(Math.random()*3) - 1 - battle.enemy.def);
+
+  // 武器特殊効果
+  let extra = '';
+  if (weapon.extraEffect === 'multi_hit') {
+    // 執着の鎖: 3回ヒット
+    let total = 0;
+    for (let i = 0; i < 3; i++) {
+      const d = Math.max(1, Math.floor(baseAtk * weapon.power * ageS.physicalMul) + Math.floor(Math.random()*2) - battle.enemy.def);
+      total += d;
+    }
+    dmg = total;
+    extra = ' (3回ヒット)';
+  } else if (weapon.extraEffect === 'slow_bleed') {
+    // 悲しみの弓: 継続ダメージを敵に付与
+    battle.enemyBleed = (battle.enemyBleed || 0) + 4;
+    extra = ' (継続ダメ +4)';
+  } else if (weapon.extraEffect === 'free_dodge') {
+    // 忘却の短剣: 次の敵攻撃を回避
+    battle.dodgeNext = true;
+    extra = ' (次の攻撃を回避)';
+  }
+
   battle.enemy.hp -= dmg;
-  state.vit = Math.max(0, state.vit - 1);
+  state.vit = Math.max(0, state.vit - cost);
   battle.shakeEnemy = true;
   setTimeout(() => battle.shakeEnemy = false, 300);
   flashDamage();
   if (musicEnabled) sfxHit();
-  showBattleMsg(`あなたの こうげき!\n${battle.enemy.name}に ${dmg}の ダメージ! (体力-1)`, () => {
+  const costMsg = cost > 1 ? ` (体力-${cost})` : ' (体力-1)';
+  showBattleMsg(`${weapon.icon} ${weapon.name}!\n${battle.enemy.name}に ${dmg}の ダメージ!${extra}${costMsg}`, () => {
     updateBattleStats(); checkBattleEnd();
   });
 }
@@ -2409,8 +2662,9 @@ function playerAttack() {
 function playerSpell() {
   state.life -= 2;
   updateBattleStats();
+  const ageS = getAgeStats();
   const baseAtk = Math.floor(state.vit * 0.06) + 3;
-  const dmg = baseAtk * 2 + Math.floor(Math.random()*4);
+  const dmg = Math.floor(baseAtk * 2 * ageS.magicMul) + Math.floor(Math.random()*4);
   battle.enemy.hp -= dmg;
   battle.shakeEnemy = true;
   setTimeout(() => battle.shakeEnemy = false, 400);
@@ -2428,8 +2682,13 @@ function playerDefend() {
 }
 
 function playerRun() {
-  // 体力が低いほど逃げにくい
-  const successRate = 0.3 + (state.vit / 200);
+  // 「責任感」状態だと逃げられない
+  if (state.statuses.responsibility) {
+    showBattleMsg('「責任感」が 重く 体を縛る...\n逃げられない!', () => enemyAct());
+    return;
+  }
+  const ageS = getAgeStats();
+  const successRate = 0.3 + (state.vit / 200) + ageS.dodgeBonus;
   if (Math.random() < successRate) {
     showBattleMsg('あなたは うまく にげだした!', () => endBattle('run'));
   } else {
@@ -2441,6 +2700,17 @@ function playerRun() {
 function enemyAct() {
   if (!battle || battle.enemy.hp <= 0) { checkBattleEnd(); return; }
 
+  // 「忘却の短剣」効果で回避
+  if (battle.dodgeNext) {
+    battle.dodgeNext = false;
+    showBattleMsg('あなたは 影のように 攻撃を かわした!', () => {
+      // 継続ダメ処理
+      applyEnemyBleed();
+      promptCommand();
+    });
+    return;
+  }
+
   // ボスは actions からランダム選択
   let actionType = 'attack';
   if (battle.enemy.actions) {
@@ -2448,6 +2718,30 @@ function enemyAct() {
   }
   let baseDmg = battle.enemy.atk + Math.floor(Math.random() * 3);
   let actionText = `${battle.enemy.name}の こうげき!`;
+  let statusInflicted = null;
+
+  // 敵タイプ別の特殊効果
+  const attackType = battle.enemy.attackType;
+  if (attackType === 'contact') {
+    actionText = `${battle.enemy.name}が 触れてきた!`;
+  } else if (attackType === 'ranged') {
+    actionText = `${battle.enemy.name}が 遠くから 射ぬいた!`;
+    baseDmg = Math.floor(baseDmg * 1.2);
+  } else if (attackType === 'area') {
+    actionText = `${battle.enemy.name}の 重い波動!`;
+    baseDmg = Math.floor(baseDmg * 1.4);
+  } else if (attackType === 'pursuit') {
+    actionText = `${battle.enemy.name}が 執拗に つきまとう!`;
+  } else if (attackType === 'taint') {
+    actionText = `${battle.enemy.name}が あなたを 染めた...`;
+    baseDmg = Math.floor(baseDmg * 0.7);
+    if (!state.statuses.responsibility && Math.random() < 0.5) {
+      statusInflicted = 'responsibility';
+      state.statuses.responsibility = true;
+    }
+  }
+
+  // ボス用追加アクション
   if (actionType === 'sharp') {
     baseDmg = Math.floor(baseDmg * 1.5);
     actionText = `${battle.enemy.name}の するどい一撃!`;
@@ -2457,28 +2751,63 @@ function enemyAct() {
   } else if (actionType === 'cry') {
     baseDmg = Math.floor(baseDmg * 0.5);
     actionText = `${battle.enemy.name}は しずかに ないた...\n胸が しめつけられる。`;
+  } else if (actionType === 'envy') {
+    // 比較の化身の特殊技
+    baseDmg = Math.floor(baseDmg * 1.3);
+    actionText = `${battle.enemy.name}「他の奴は もっと できる」`;
+    if (!state.statuses.responsibility) {
+      statusInflicted = 'responsibility';
+      state.statuses.responsibility = true;
+    }
+  } else if (actionType === 'area_crush') {
+    // 成果執着体の特殊技
+    baseDmg = Math.floor(baseDmg * 1.7);
+    actionText = `${battle.enemy.name}の 重圧波!`;
   }
+
   const actualDmg = battle.defending ? Math.max(1, Math.floor(baseDmg / 2)) : baseDmg;
   battle.defending = false;
   state.vit = Math.max(0, state.vit - actualDmg);
   flashDamage();
   if (musicEnabled) sfxHurt();
   updateBattleStats();
+
+  let statusMsg = '';
+  if (statusInflicted === 'responsibility') {
+    statusMsg = '\n「責任感」を 植え付けられた!\n(逃げられない)';
+  }
+
   if (state.vit <= 0) {
     state.life -= 5;
     updateStats();
     if (state.life <= 0) {
-      showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!\n体力が 尽きた…`, () => battleGameOver());
+      showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!${statusMsg}\n体力が 尽きた…`, () => battleGameOver());
       return;
     }
-    showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!\n体力が 尽きた。よめい -5日`, () => {
+    showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!${statusMsg}\n体力が 尽きた。よめい -5日`, () => {
       state.vit = 30;
       updateBattleStats();
       promptCommand();
     });
     return;
   }
-  showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!`, () => promptCommand());
+  showBattleMsg(`${actionText}\nあなたは ${actualDmg}の ダメージ!${statusMsg}`, () => {
+    applyEnemyBleed();
+    promptCommand();
+  });
+}
+
+// 「悲しみの弓」による継続ダメージを敵に適用
+function applyEnemyBleed() {
+  if (battle && battle.enemyBleed > 0) {
+    const dmg = battle.enemyBleed;
+    battle.enemy.hp -= dmg;
+    log(`(継続ダメ: ${battle.enemy.name}に ${dmg})`, 'dim');
+    updateBattleStats();
+    if (battle.enemy.hp <= 0) {
+      checkBattleEnd();
+    }
+  }
 }
 
 function checkBattleEnd() {
@@ -2506,27 +2835,32 @@ function checkBattleEnd() {
 function endBattle(result) {
   if (result === 'win') {
     state.killCount++;
-    const expReward = 2 + Math.floor(state.day / 5);
+    const isSecret = state.day === 5 && battle.enemyRef && battle.enemyRef.isSecret;
+    const expReward = isSecret ? 1 : (2 + Math.floor(state.day / 5));
     state.coin += expReward;
-    state.vit = Math.min(100, state.vit + 5);
-    const lifeBonus = Math.random() < 0.4 ? 1 : 0;
+    // 経験値: 撃破ごとに +2、ボスは +5
+    const expGain = (battle.enemyRef && battle.enemyRef.isBoss) ? 5 : 2;
+    gainExp(expGain);
+    // 通常敵は体力少し戻る、裏ルート敵は戻らない
+    const vitGain = isSecret ? 0 : 5;
+    state.vit = Math.min(100, state.vit + vitGain);
+    const lifeBonus = (!isSecret && Math.random() < 0.4) ? 1 : 0;
     if (lifeBonus > 0) state.life += lifeBonus;
     if (musicEnabled) sfxVictory();
 
     // 裏ルート: Day5 で 特殊敵を倒したらカウント
     let secretMsg = '';
-    if (state.day === 5 && battle.enemyRef && battle.enemyRef.isSecret) {
+    if (isSecret) {
       state.secretKills++;
-      if (state.secretKills < 10) {
-        secretMsg = `\n（${state.secretKills} / 10）`;
-      } else if (state.secretKills === 10 && !state.hiddenStair) {
-        // 隠し階段を出現させる
+      if (state.secretKills === 10 && !state.hiddenStair) {
         secretMsg = '\n\n…奥に 光る階段が 現れた!';
         spawnHiddenStair();
       }
     }
 
-    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward} ／ 体力 +5${lifeBonus > 0 ? '\nよめい +'+lifeBonus+'日' : ''}${secretMsg}`, () => {
+    const vitMsg = vitGain > 0 ? ` ／ 体力 +${vitGain}` : '';
+    const lifeMsg = lifeBonus > 0 ? `\nよめい +${lifeBonus}日` : '';
+    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward}${vitMsg}${lifeMsg}${secretMsg}`, () => {
       finishBattle();
     });
   } else {
@@ -2651,6 +2985,17 @@ function tryMove(dx, dy) {
 
 // ============ EVENT SYSTEM ============
 function triggerEvent() {
+  // 中ボス: Day10「比較の化身」、Day20「成果執着体」
+  if (state.day === 10 && !state.specials.beatComparison) {
+    state.eventDone = true;
+    triggerMidBoss10();
+    return;
+  }
+  if (state.day === 20 && !state.specials.beatObsession) {
+    state.eventDone = true;
+    triggerMidBoss20();
+    return;
+  }
   const ev = EVENTS[state.day];
   if (!ev) {
     state.life -= 1;
@@ -2660,6 +3005,82 @@ function triggerEvent() {
   state.eventDone = true;
   if (musicEnabled) sfxStair();
   showEvent(ev);
+}
+
+// ============ 中ボス ============
+function makeComparisonBoss() {
+  return {
+    x: 0, y: 0, px: 0, py: 0,
+    kind: 'comparison', name: '比較の化身',
+    hp: 120, maxHp: 120, atk: 12, def: 3,
+    sight: 99, ai: 'static',
+    attackType: 'taint',  // 状態異常を付与してくる
+    actions: ['attack', 'attack', 'sharp', 'envy'],
+    isBoss: true,
+  };
+}
+
+function makeObsessionBoss() {
+  return {
+    x: 0, y: 0, px: 0, py: 0,
+    kind: 'obsession', name: '成果執着体',
+    hp: 240, maxHp: 240, atk: 18, def: 5,
+    sight: 99, ai: 'static',
+    attackType: 'area',
+    actions: ['attack', 'sharp', 'area_crush', 'judgment'],
+    isBoss: true,
+  };
+}
+
+function triggerMidBoss10() {
+  log('階段の先に 巨大な影が 立ちはだかった。', 'epic');
+  log('「お前は 隣の奴より 劣っているな?」', 'warn');
+  if (musicEnabled) playMusic('battle');
+  inputLocked = true;
+  setTimeout(() => {
+    const boss = makeComparisonBoss();
+    startBossBattle(boss, () => {
+      state.specials.beatComparison = true;
+      if (musicEnabled) sfxLevelUp();
+      showBattleMsg('比較の化身を 退けた。\n\n「比べることに 意味は なかった」\n余命 +5日 / 経験 +5', () => {
+        state.life += 5;
+        gainExp(5);
+        updateStats();
+        finishBossBattle();
+        setTimeout(() => {
+          // 通常のDay10イベントへ
+          const ev = EVENTS[10];
+          if (ev) showEvent(ev);
+          else nextDay();
+        }, 1500);
+      });
+    });
+  }, 1500);
+}
+
+function triggerMidBoss20() {
+  log('階段の先に 鈍く 光る巨体。', 'epic');
+  log('「これまで 何を 成し遂げた?」', 'warn');
+  if (musicEnabled) playMusic('battle');
+  inputLocked = true;
+  setTimeout(() => {
+    const boss = makeObsessionBoss();
+    startBossBattle(boss, () => {
+      state.specials.beatObsession = true;
+      if (musicEnabled) sfxLevelUp();
+      showBattleMsg('成果執着体を 砕いた。\n\n「成果は 自分のものでは なかった」\n余命 +5日 / 経験 +8', () => {
+        state.life += 5;
+        gainExp(8);
+        updateStats();
+        finishBossBattle();
+        setTimeout(() => {
+          const ev = EVENTS[20];
+          if (ev) showEvent(ev);
+          else nextDay();
+        }, 1500);
+      });
+    });
+  }, 1500);
 }
 
 function showEvent(ev) {
@@ -2776,14 +3197,34 @@ function nextDay() {
   inputLocked = true;
   setTimeout(() => {
     if (state.day >= 30) {
-      // 死神戦
       loadDay(30);
       inputLocked = false;
       return;
     }
-    loadDay(state.day + 1);
+    const newDay = state.day + 1;
+    // 武器配布チェック
+    checkWeaponUnlock(newDay);
+    loadDay(newDay);
     inputLocked = false;
   }, 500);
+}
+
+// Dayごとに武器配布
+function checkWeaponUnlock(day) {
+  const unlocks = {
+    8:  { key: 'anger_hammer',    msg: '怒りが あなたに 武器を与えた。\n「怒りの鉄槌」を 手に入れた!' },
+    15: { key: 'sorrow_bow',      msg: '悲しみが 形になった。\n「悲しみの弓」を 手に入れた!' },
+    18: { key: 'obsession_chain', msg: '執着が 鎖となって 巻きつく。\n「執着の鎖」を 手に入れた!' },
+    22: { key: 'oblivion_dagger', msg: 'すべてを 忘れる刃。\n「忘却の短剣」を 手に入れた!' },
+    25: { key: 'hope_lantern',    msg: '小さな 光が ともった。\n「希望の灯」を 手に入れた!' },
+  };
+  const u = unlocks[day];
+  if (u && !state.ownedWeapons[u.key]) {
+    state.ownedWeapons[u.key] = true;
+    log(u.msg, 'good');
+    log('(記憶メニューで 装備変更)', 'dim');
+    if (musicEnabled) sfxLevelUp();
+  }
 }
 
 // ============ DEATH (Day 30) ============
@@ -2966,6 +3407,20 @@ function gameOver() {
 }
 
 function openMenu() {
+  if (state.inBattle) return;
+  showEquipModal();
+}
+
+function showEquipModal() {
+  // 装備変更モーダルを動的生成して表示
+  let modal = document.getElementById('equipModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'equipModal';
+    modal.className = 'modal hidden';
+    document.body.appendChild(modal);
+  }
+  const ownedKeys = Object.keys(state.ownedWeapons);
   const items = [];
   if (state.items.first_wound) items.push('最初の傷');
   if (state.items.liquor_left) items.push('飲み残しの酒');
@@ -2975,9 +3430,67 @@ function openMenu() {
   if (state.items.talent_shard) items.push('★才能のかけら');
   if (state.items.tainted_heart) items.push('★汚れた心');
   if (state.items.veteran_courage) items.push('★歴戦の勇気');
-  const itemsStr = items.length ? items.join('、') : 'なし';
-  log(`所持品: ${itemsStr}`, 'dim');
-  log(`記憶 ${state.coin} ／ 体力 ${state.vit} ／ 余命 ${state.life}日`, 'dim');
+  const ageS = getAgeStats();
+  const statusStr = Object.keys(state.statuses).length === 0 ? 'なし' :
+    Object.keys(state.statuses).map(s => s === 'responsibility' ? '責任感' : s).join('、');
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-tag">― 記憶の 整理 ―</div>
+      <div style="font-family:'Shippori Mincho',serif;font-size:18px;margin-bottom:8px;">${state.age}歳 (${ageS.stage}期)</div>
+      <div style="font-size:12px;color:#909090;margin-bottom:14px;">
+        余命 ${state.life}日 ／ 体力 ${state.vit} ／ 記憶 ${state.coin}<br>
+        経験 ${state.exp} / ${state.expToNext}<br>
+        状態: ${statusStr}
+      </div>
+      <div style="font-size:11px;color:var(--gold);letter-spacing:0.2em;text-align:left;margin-bottom:8px;">武器 (最大2つ装備)</div>
+      <div id="equipWeapons" style="display:flex;flex-direction:column;gap:6px;text-align:left;margin-bottom:14px;"></div>
+      <div style="font-size:11px;color:var(--gold);letter-spacing:0.2em;text-align:left;margin-bottom:8px;">所持品</div>
+      <div style="font-size:12px;color:#a0a0a0;text-align:left;margin-bottom:18px;">${items.length ? items.join('、') : 'なし'}</div>
+      <button class="btn-modal" onclick="closeEquipModal()">閉じる</button>
+    </div>
+  `;
+  // 武器リスト動的生成
+  const weaponsEl = modal.querySelector('#equipWeapons');
+  for (const wKey of ownedKeys) {
+    const w = WEAPONS[wKey];
+    const equipped = state.weapons.includes(wKey);
+    const div = document.createElement('div');
+    div.style.cssText = 'border:1px solid ' + (equipped ? '#a48b3a' : '#404050') + ';padding:8px 10px;background:' + (equipped ? 'rgba(60,40,10,0.5)' : 'rgba(20,20,30,0.3)') + ';cursor:pointer;';
+    div.innerHTML = `
+      <div style="font-size:13px;color:${equipped ? 'var(--gold)' : '#ccc'};">
+        ${equipped ? '★ ' : ''}${w.icon} <b>${w.name}</b> <span style="font-size:10px;color:#888;">${w.effect}</span>
+      </div>
+      <div style="font-size:10px;color:#808080;margin-top:2px;">${w.desc}</div>
+    `;
+    div.onclick = () => toggleWeapon(wKey);
+    weaponsEl.appendChild(div);
+  }
+  modal.classList.remove('hidden');
+}
+
+function toggleWeapon(wKey) {
+  const idx = state.weapons.indexOf(wKey);
+  if (idx >= 0) {
+    // 外す（最低1つは装備していないとダメ）
+    if (state.weapons.length <= 1) {
+      log('武器を ひとつは 持っていないと いけない。', 'dim');
+      return;
+    }
+    state.weapons.splice(idx, 1);
+  } else {
+    // 装備（最大2つ）
+    if (state.weapons.length >= 2) {
+      // 一番古いものを外して入れ替え
+      state.weapons.shift();
+    }
+    state.weapons.push(wKey);
+  }
+  state.currentWeapon = state.weapons[0];
+  showEquipModal(); // 再描画
+}
+
+function closeEquipModal() {
+  document.getElementById('equipModal').classList.add('hidden');
 }
 
 function resetGame() {
