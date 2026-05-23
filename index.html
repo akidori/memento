@@ -205,6 +205,7 @@
   <div class="battle-cmd battle-ui grid-cmd" id="battleCmd" style="display:none">
     <button class="cmd-btn" data-cmd="attack" onclick="selectCmd('attack')">たたかう</button>
     <button class="cmd-btn" data-cmd="spell" onclick="selectCmd('spell')">じゅもん<span class="cost">よめい -2</span></button>
+    <button class="cmd-btn" data-cmd="item" onclick="selectCmd('item')">どうぐ</button>
     <button class="cmd-btn" data-cmd="defend" onclick="selectCmd('defend')">ぼうぎょ</button>
     <button class="cmd-btn" data-cmd="run" onclick="selectCmd('run')">にげる</button>
   </div>
@@ -943,12 +944,16 @@ function newState() {
     age: 18,           // 開始年齢
     exp: 0,            // 経験値
     expToNext: 6,      // 次の年齢までに必要な経験値
+    maxVit: 100,       // 最大体力（年齢UPで増える）
+    baseAtk: 0,        // ベース攻撃力ボーナス（年齢UPで増える）
     // 武器システム（最初は「勇気の剣」のみ）
     weapons: ['courage_sword'],   // 装備中 (最大2つ)
     ownedWeapons: { courage_sword: true },  // 所持武器
     currentWeapon: 'courage_sword',
     // 状態異常
     statuses: {},      // { responsibility: true, ... }
+    // 消耗アイテム所持数
+    inventory: { herb: 3, life_drop: 1 },  // 初期所持
   };
 }
 
@@ -1916,6 +1921,35 @@ const SHADOW_TYPES = {
   lonely:  { name: 'こどく',       ai: 'teleport', attackType: 'taint',    desc: '触れた者に 「責任感」を 植え付ける' },
 };
 
+// ============ 消耗アイテム ============
+const CONSUMABLES = {
+  herb: {
+    name: '薬草', icon: '🌿',
+    desc: '体力を 30回復する。',
+    effect: 'heal', value: 30,
+  },
+  elixir: {
+    name: '霊薬', icon: '💧',
+    desc: '体力を 完全回復する。',
+    effect: 'heal_full',
+  },
+  life_drop: {
+    name: '命の雫', icon: '🩸',
+    desc: '余命を 3日 取り戻す。',
+    effect: 'life', value: 3,
+  },
+  memory_book: {
+    name: '記憶の書', icon: '📖',
+    desc: '戦闘中に使うと 敵に大ダメージ。',
+    effect: 'damage', value: 80,
+  },
+  freedom_charm: {
+    name: '解放のお守り', icon: '🔔',
+    desc: '状態異常を 全て解除。',
+    effect: 'cure',
+  },
+};
+
 // ============ 武器システム ============
 const WEAPONS = {
   courage_sword: {
@@ -2265,17 +2299,23 @@ function gainExp(amount) {
 
 function onAgeUp() {
   if (musicEnabled) sfxLevelUp();
+  // 成長: 体力満タン回復 + 最大体力UP + ベース攻撃力UP
+  state.maxVit = (state.maxVit || 100) + 5;
+  state.baseAtk = (state.baseAtk || 0) + 1;
+  state.vit = state.maxVit;  // 年齢UPで体力満タン
   log(`―― あなたは ${state.age}歳になった ――`, 'epic');
-  // ステージが変わるタイミングで通知
+  log(`最大体力 +5 (${state.maxVit}) ／ 攻撃力 +1 ／ 体力全回復`, 'good');
+  // ステージ変わり目で特別演出
   if (state.age === 30) {
-    log('若さは過ぎ去った。壮年期に入る。', 'warn');
-    log('物理攻撃力 -23% / 回避 -20%', 'dim');
+    log('若さは 過ぎ去った。壮年期に 入る。', 'warn');
+    log('回避が 効きにくくなる...', 'dim');
   } else if (state.age === 50) {
-    log('体は重くなり、心は澄んでいく。', 'warn');
-    log('物理 -25% / 魔法 +50% / 観測の力 強化', 'dim');
+    log('体は 重くなり、心は 澄んでいく。', 'warn');
+    log('魔法が 強化された / 物理が 衰えた', 'dim');
   } else if (state.age === 70) {
-    log('もう、長くはないのかもしれない。', 'warn');
+    log('もう、長くは ないのかもしれない。', 'warn');
   }
+  updateStats();
 }
 
 function updateStats() {
@@ -2284,8 +2324,9 @@ function updateStats() {
   const lifeEl = document.getElementById('lifeDisplay');
   lifeEl.textContent = `${life}日`;
   lifeEl.classList.toggle('warn', life <= 5);
-  document.getElementById('vitDisplay').textContent = `${Math.max(0, state.vit)}`;
-  document.getElementById('vitBar').style.width = `${Math.max(0, state.vit)}%`;
+  const maxVit = state.maxVit || 100;
+  document.getElementById('vitDisplay').textContent = `${Math.max(0, state.vit)}/${maxVit}`;
+  document.getElementById('vitBar').style.width = `${Math.max(0, state.vit) / maxVit * 100}%`;
   document.getElementById('coinDisplay').textContent = `${state.coin}`;
   document.getElementById('floorDisplay').textContent = `${state.day} / 30`;
   // 年齢
@@ -2540,7 +2581,6 @@ function highlightCmd(idx) {
 function selectCmd(cmd) {
   if (!battle || !battle.waitingForInput) return;
   if (cmd === 'attack') {
-    // 装備武器が1個なら即攻撃、2個なら武器選択
     if (state.weapons.length <= 1) {
       battle.waitingForInput = false;
       document.getElementById('battleCmd').style.display = 'none';
@@ -2551,11 +2591,84 @@ function selectCmd(cmd) {
     }
     return;
   }
+  if (cmd === 'item') {
+    showItemPicker();
+    return;
+  }
   battle.waitingForInput = false;
   document.getElementById('battleCmd').style.display = 'none';
   if (cmd === 'spell') playerSpell();
   else if (cmd === 'defend') playerDefend();
   else if (cmd === 'run') playerRun();
+}
+
+// アイテム選択ピッカー
+function showItemPicker() {
+  const cmd = document.getElementById('battleCmd');
+  const owned = Object.keys(state.inventory || {}).filter(k => state.inventory[k] > 0);
+  if (owned.length === 0) {
+    showBattleMsg('道具を 持っていない。', () => promptCommand());
+    return;
+  }
+  cmd.style.display = 'grid';
+  cmd.innerHTML = '';
+  for (const itemKey of owned) {
+    const item = CONSUMABLES[itemKey];
+    if (!item) continue;
+    const btn = document.createElement('button');
+    btn.className = 'cmd-btn';
+    btn.innerHTML = `${item.icon} ${item.name} x${state.inventory[itemKey]}<span class="cost">${item.desc}</span>`;
+    btn.onclick = () => {
+      useItem(itemKey);
+    };
+    cmd.appendChild(btn);
+  }
+  const back = document.createElement('button');
+  back.className = 'cmd-btn';
+  back.textContent = 'もどる';
+  back.onclick = () => {
+    restoreCmdButtons();
+    promptCommand();
+  };
+  cmd.appendChild(back);
+}
+
+function useItem(itemKey) {
+  const item = CONSUMABLES[itemKey];
+  if (!item || !state.inventory[itemKey]) return;
+  state.inventory[itemKey]--;
+  if (state.inventory[itemKey] <= 0) delete state.inventory[itemKey];
+
+  battle.waitingForInput = false;
+  document.getElementById('battleCmd').style.display = 'none';
+  restoreCmdButtons();
+
+  if (item.effect === 'heal') {
+    state.vit = Math.min(state.maxVit || 100, state.vit + item.value);
+    updateBattleStats();
+    showBattleMsg(`${item.icon} ${item.name}を 使った。\n体力 +${item.value}!`, () => enemyAct());
+  } else if (item.effect === 'heal_full') {
+    state.vit = state.maxVit || 100;
+    updateBattleStats();
+    showBattleMsg(`${item.icon} ${item.name}を 使った。\n体力 完全回復!`, () => enemyAct());
+  } else if (item.effect === 'life') {
+    state.life += item.value;
+    updateStats();
+    showBattleMsg(`${item.icon} ${item.name}を 使った。\nよめい +${item.value}日!`, () => enemyAct());
+  } else if (item.effect === 'damage') {
+    battle.enemy.hp -= item.value;
+    battle.shakeEnemy = true;
+    setTimeout(() => battle.shakeEnemy = false, 400);
+    flashDamage();
+    showBattleMsg(`${item.icon} ${item.name}を 使った。\n${battle.enemy.name}に ${item.value}の 大ダメージ!`, () => {
+      updateBattleStats();
+      checkBattleEnd();
+    });
+  } else if (item.effect === 'cure') {
+    const had = Object.keys(state.statuses).length > 0;
+    state.statuses = {};
+    showBattleMsg(`${item.icon} ${item.name}を 使った。\n${had ? '状態異常を 解除した!' : '影響は なかった。'}`, () => enemyAct());
+  }
 }
 
 // 武器選択ピッカー（2種装備時）
@@ -2594,6 +2707,7 @@ function restoreCmdButtons() {
   cmd.innerHTML = `
     <button class="cmd-btn" data-cmd="attack" onclick="selectCmd('attack')">たたかう</button>
     <button class="cmd-btn" data-cmd="spell" onclick="selectCmd('spell')">じゅもん<span class="cost">よめい -2</span></button>
+    <button class="cmd-btn" data-cmd="item" onclick="selectCmd('item')">どうぐ</button>
     <button class="cmd-btn" data-cmd="defend" onclick="selectCmd('defend')">ぼうぎょ</button>
     <button class="cmd-btn" data-cmd="run" onclick="selectCmd('run')">にげる</button>
   `;
@@ -2603,12 +2717,13 @@ function playerAttack() {
   const wKey = state.currentWeapon || 'courage_sword';
   const weapon = WEAPONS[wKey];
   const ageS = getAgeStats();
-  const baseAtk = Math.floor(state.vit * 0.06) + 5;
+  // ベース攻撃力 = 体力 × 0.06 + 5 + 年齢成長ボーナス
+  const baseAtk = Math.floor(state.vit * 0.06) + 5 + (state.baseAtk || 0);
   let cost = 1; // 基本体力消費
 
   // 「希望の灯」は攻撃せず回復
   if (weapon.extraEffect === 'heal_status') {
-    state.vit = Math.min(100, state.vit + 30);
+    state.vit = Math.min(state.maxVit || 100, state.vit + 30);
     let cleared = '';
     if (Object.keys(state.statuses).length > 0) {
       state.statuses = {};
@@ -2664,13 +2779,16 @@ function playerSpell() {
   state.life -= 2;
   updateBattleStats();
   const ageS = getAgeStats();
-  const baseAtk = Math.floor(state.vit * 0.06) + 3;
-  const dmg = Math.floor(baseAtk * 2 * ageS.magicMul) + Math.floor(Math.random()*4);
+  // 呪文ダメ = 大幅強化、敵防御を無視、年齢成長と魔法倍率
+  // ベース: 20 + 体力*0.1 + ベース攻撃力*2 + 年齢/2
+  const baseDmg = 20 + Math.floor(state.vit * 0.1) + (state.baseAtk || 0) * 2 + Math.floor(state.age / 2);
+  const dmg = Math.floor(baseDmg * ageS.magicMul) + Math.floor(Math.random() * 6);
+  // 防御無視
   battle.enemy.hp -= dmg;
   battle.shakeEnemy = true;
   setTimeout(() => battle.shakeEnemy = false, 400);
   flashDamage();
-  showBattleMsg(`じゅもんを となえた!\n${battle.enemy.name}に ${dmg}の ダメージ!\n(よめい -2)`, () => {
+  showBattleMsg(`じゅもんを となえた!\n${battle.enemy.name}に ${dmg}の 大ダメージ! (防御無視)\n(よめい -2)`, () => {
     updateBattleStats();
     if (state.life <= 0) { battleGameOver(); return; }
     checkBattleEnd();
@@ -2844,7 +2962,7 @@ function endBattle(result) {
     gainExp(expGain);
     // 通常敵は体力少し戻る、裏ルート敵は戻らない
     const vitGain = isSecret ? 0 : 5;
-    state.vit = Math.min(100, state.vit + vitGain);
+    state.vit = Math.min(state.maxVit || 100, state.vit + vitGain);
     const lifeBonus = (!isSecret && Math.random() < 0.4) ? 1 : 0;
     if (lifeBonus > 0) state.life += lifeBonus;
     if (musicEnabled) sfxVictory();
@@ -2861,7 +2979,17 @@ function endBattle(result) {
 
     const vitMsg = vitGain > 0 ? ` ／ 体力 +${vitGain}` : '';
     const lifeMsg = lifeBonus > 0 ? `\nよめい +${lifeBonus}日` : '';
-    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward}${vitMsg}${lifeMsg}${secretMsg}`, () => {
+
+    // アイテムドロップ判定（25%確率）
+    let dropMsg = '';
+    if (!isSecret && Math.random() < 0.25) {
+      const dropTable = ['herb', 'herb', 'herb', 'life_drop', 'freedom_charm', 'memory_book'];
+      const dropKey = dropTable[Math.floor(Math.random() * dropTable.length)];
+      state.inventory[dropKey] = (state.inventory[dropKey] || 0) + 1;
+      dropMsg = `\n${CONSUMABLES[dropKey].icon} 「${CONSUMABLES[dropKey].name}」を 拾った!`;
+    }
+
+    showBattleMsg(`${battle.enemy.name}を しずめた。\n記憶 +${expReward}${vitMsg}${lifeMsg}${dropMsg}${secretMsg}`, () => {
       finishBattle();
     });
   } else {
@@ -3122,7 +3250,7 @@ function applyChoice(ev, ch, idx) {
   if (musicEnabled) sfxBlip(600 + idx * 80, 0.05);
   const e = ch.e;
   if (e.life !== undefined) state.life += e.life;
-  if (e.vit !== undefined) state.vit = Math.max(0, Math.min(100, state.vit + e.vit));
+  if (e.vit !== undefined) state.vit = Math.max(0, Math.min(state.maxVit || 100, state.vit + e.vit));
   if (e.coin !== undefined) state.coin += e.coin;
   if (e.fight) state.fight += e.fight;
   if (e.accept) state.accept += e.accept;
@@ -3434,18 +3562,27 @@ function showEquipModal() {
   const ageS = getAgeStats();
   const statusStr = Object.keys(state.statuses).length === 0 ? 'なし' :
     Object.keys(state.statuses).map(s => s === 'responsibility' ? '責任感' : s).join('、');
+  // 消耗アイテムリスト
+  const consumables = Object.keys(state.inventory || {}).filter(k => state.inventory[k] > 0);
+  const consumableHtml = consumables.length === 0 ? '<span style="color:#606070;">なし</span>' :
+    consumables.map(k => {
+      const c = CONSUMABLES[k];
+      return `<div style="font-size:11px;color:#c0c0c0;">${c.icon} ${c.name} x${state.inventory[k]} <span style="color:#707080;">- ${c.desc}</span></div>`;
+    }).join('');
   modal.innerHTML = `
-    <div class="modal-content" style="max-width:520px;">
+    <div class="modal-content" style="max-width:520px;max-height:85vh;overflow-y:auto;">
       <div class="modal-tag">― 記憶の 整理 ―</div>
       <div style="font-family:'Shippori Mincho',serif;font-size:18px;margin-bottom:8px;">${state.age}歳 (${ageS.stage}期)</div>
       <div style="font-size:12px;color:#909090;margin-bottom:14px;">
-        余命 ${state.life}日 ／ 体力 ${state.vit} ／ 記憶 ${state.coin}<br>
-        経験 ${state.exp} / ${state.expToNext}<br>
+        余命 ${state.life}日 ／ 体力 ${state.vit}/${state.maxVit || 100} ／ 記憶 ${state.coin}<br>
+        経験 ${state.exp} / ${state.expToNext} ／ 攻撃+${state.baseAtk || 0}<br>
         状態: ${statusStr}
       </div>
       <div style="font-size:11px;color:var(--gold);letter-spacing:0.2em;text-align:left;margin-bottom:8px;">武器 (最大2つ装備)</div>
       <div id="equipWeapons" style="display:flex;flex-direction:column;gap:6px;text-align:left;margin-bottom:14px;"></div>
-      <div style="font-size:11px;color:var(--gold);letter-spacing:0.2em;text-align:left;margin-bottom:8px;">所持品</div>
+      <div style="font-size:11px;color:var(--gold);letter-spacing:0.2em;text-align:left;margin-bottom:8px;">どうぐ (戦闘で使用)</div>
+      <div style="text-align:left;margin-bottom:14px;line-height:1.8;">${consumableHtml}</div>
+      <div style="font-size:11px;color:var(--gold);letter-spacing:0.2em;text-align:left;margin-bottom:8px;">思い出</div>
       <div style="font-size:12px;color:#a0a0a0;text-align:left;margin-bottom:18px;">${items.length ? items.join('、') : 'なし'}</div>
       <button class="btn-modal" onclick="closeEquipModal()">閉じる</button>
     </div>
